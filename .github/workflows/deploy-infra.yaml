@@ -1,0 +1,144 @@
+name: Deploy Azure Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/iac/**'
+  workflow_dispatch:
+    inputs:
+      run_prod:
+        description: 'Also deploy prod after dev (manual runs only)'
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'infra/iac/**'
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  TF_STATE_RESOURCE_GROUP: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
+  TF_STATE_STORAGE_ACCOUNT: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
+  TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
+  TF_STATE_PREFIX: core 
+
+concurrency:
+  group: infra-terraform
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Microsoft Defender for Cloud - Code Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+      security-events: write
+    steps:
+    - name: Checkout Code to Scan
+      uses: actions/checkout@v3
+    - name: Run Microsoft Security DevOps
+      uses: microsoft/security-devops-action@latest
+      id: msdo
+    - name: Upload alerts to Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.msdo.outputs.sarifFile }}
+
+  terraform-dev:
+    name: 'Terraform Infra for Dev'
+    runs-on: ubuntu-latest
+    environment: development
+    defaults:
+      run:
+        working-directory: ./infra/iac
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Terraform Init (Remote Backend - Dev)
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${TF_STATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TF_STATE_CONTAINER}" \
+            -backend-config="key=${TF_STATE_PREFIX}-dev.tfstate"
+      - name: Terraform Validate
+        run: terraform validate
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+      - name: Plan Core (Dev)
+        run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core
+      - name: Apply Core (Dev)
+        run: terraform apply -auto-approve tfplan-core
+      - name: Plan Full (Dev)
+        id: plan-full
+        run: |
+          terraform plan -var-file=dev.tfvars -out=tfplan-full
+          if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
+            echo "is_empty=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_empty=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Apply Full (Dev)
+        if: steps.plan-full.outputs.is_empty == 'false'
+        run: terraform apply -auto-approve tfplan-full
+
+  terraform-prod:
+    name: 'Terraform Infra for Prod'
+    runs-on: ubuntu-latest
+    needs: terraform-dev
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_prod == 'true')
+    environment: production
+    defaults:
+      run:
+        working-directory: ./infra/iac
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Terraform Init (Remote Backend - Prod)
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${TF_STATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TF_STATE_CONTAINER}" \
+            -backend-config="key=${TF_STATE_PREFIX}-prod.tfstate"
+      - name: Terraform Validate
+        run: terraform validate
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+      - name: Plan Core (Prod)
+        run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core
+      - name: Apply Core (Prod)
+        run: terraform apply -auto-approve tfplan-core
+      - name: Plan Full (Prod)
+        id: plan-full
+        run: |
+          terraform plan -var-file=prod.tfvars -out=tfplan-full
+          if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
+            echo "is_empty=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_empty=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Apply Full (Prod)
+        if: steps.plan-full.outputs.is_empty == 'false'
+        run: terraform apply -auto-approve tfplan-full

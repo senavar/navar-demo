@@ -1,0 +1,62 @@
+{
+  "appTitle": "Happy Birthday Calendar - Wiz Demo",
+  "listView": "List",
+  "calendarView": "Calendar",
+  "errorFetching": "Error fetching birthdays",
+  "addBirthdayTitle": "Add a New Birthday",
+  "namePlaceholder": "Name",
+  "yearPlaceholder": "Year",
+  "monthPlaceholder": "Month",
+  "dayPlaceholder": "Day",
+  "addButton": "Add Birthday",
+  "addingButton": "Adding...",
+  "noBirthdays": "No birthdays yet. Add one below!",
+  "onDate": "{weekday}, {month} {day}, {year}",
+  "turnsAge": "Turns {age}",
+  "prev": "Prev",
+  "next": "Next",
+  "upcomingBirthdays": "Upcoming Birthdays",
+  "errorInvalidDayInMonth": "Invalid day. {monthName} {year} only has {daysInMonth} days.",
+  "daysUntilNextBirthday": "in {count} day(s)",
+  "cancel": "Cancel",
+  "comparison": {
+    "title": "Age Comparison",
+    "selectTwo": "Select two or more people to compare their ages.",
+    "isOlderThan": "is older than",
+    "by": "by",
+    "years": "{count} year | {count} years",
+    "months": "{count} month | {count} months",
+    "days": "{count} day | {count} days",
+    "sameDay": "less than a day"
+  },
+  "errorInvalidFileType": "Invalid photo type. Please select a JPEG, JPG or PNG image.",
+  "errorFileTooLarge": "Photo is too large. Please select a photo smaller than {size}.",
+  "profilePictureLabel": "Upload Picture (optional)",
+  "changePicture": "Change Picture",
+  "editPicture": "Edit",
+  "cropImageTitle": "Adjust Photo",
+  "confirmCrop": "Confirm",
+  "submitButton": "Submit",
+  "admin": {
+    "title": "Admin Portal",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete the entry for {name}?",
+    "editTitle": "Edit {name}",
+    "changePhoto": "Change Photo",
+    "removePhoto": "Remove Photo",
+    "table": {
+      "photo": "Photo",
+      "name": "Name",
+      "birthday": "Birthday",
+      "actions": "Actions"
+    }
+  },
+  "wiz": {
+    "button": "Wiz Exercise",
+    "title": "Wiz Exercise File",
+    "loading": "Loading...",
+    "close": "Close",
+    "pathLabel": "Container path"
+  }
+}

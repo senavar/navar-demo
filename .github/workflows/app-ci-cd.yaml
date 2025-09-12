@@ -1,0 +1,295 @@
+name: app-ci-cd
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+    paths:
+      - 'app/frontend/**'
+      - 'app/backend/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/frontend/**'
+      - 'app/backend/**'
+  workflow_dispatch:
+    inputs:
+      deploy_to_dev:
+        description: 'Deploy to dev environment after image build (true/false)'
+        required: false
+        default: 'false'
+      push_images:
+        description: 'Push built images to registry (true/false)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  security-events: write
+
+env:
+  REGISTRY: ${{ vars.REGISTRY_LOGIN_SERVER }}
+  FRONTEND_DIR: app/frontend
+  BACKEND_DIR: app/backend
+  NAMESPACE: ${{ vars.NAMESPACE }}
+
+jobs:
+  scan:
+    name: Microsoft Defender for Cloud - Code Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+      security-events: write
+    steps:
+    - name: Checkout Code to Scan
+      uses: actions/checkout@v3
+    - name: Run Microsoft Security DevOps
+      uses: microsoft/security-devops-action@latest
+      id: msdo
+    - name: Upload alerts to Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.msdo.outputs.sarifFile }}
+
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Generate SHA
+        id: metadata
+        run: echo "shortsha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+      - name: Determine Semantic Version
+        id: setversion
+        run: |
+          if [[ "$GITHUB_REF" =~ refs/tags/v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      SEMVER: ${{ steps.setversion.outputs.version }}
+      SHORT_SHA: ${{ steps.metadata.outputs.shortsha }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+    env:
+      SEMVER: ${{ needs.setup.outputs.SEMVER }}
+      SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: Enforce Image Push Policy
+        id: pushpolicy
+        run: |
+          ALLOW=false
+          # Allow push only when:
+          # 1) push event on main branch
+          # 2) push event on semantic version tag vX.Y.Z
+          # 3) manual dispatch from main with push_images != false
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+              ALLOW=true
+            elif [[ "${GITHUB_REF}" =~ refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              ALLOW=true
+            fi
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ "${GITHUB_REF}" == "refs/heads/main" && "${{ github.event.inputs.push_images }}" != "false" ]]; then
+              ALLOW=true
+            fi
+          fi
+          # Enforce manual toggle: if input explicitly false, always false.
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ github.event.inputs.push_images }}" == "false" ]]; then
+            ALLOW=false
+          fi
+          echo "allow_push=$ALLOW" >> $GITHUB_OUTPUT
+          echo "ALLOW_PUSH=$ALLOW" >> $GITHUB_ENV
+      - name: Azure Login
+        # Only authenticate to Azure when we intend to push images (saves time on feature branches / dry runs)
+        if: steps.pushpolicy.outputs.allow_push == 'true'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: ACR Login
+        if: steps.pushpolicy.outputs.allow_push == 'true'
+        run: |
+          ACR_NAME=${REGISTRY%%.*}
+          echo "Logging into ACR: $ACR_NAME"
+          az acr login --name "$ACR_NAME"
+      - name: Build Frontend Image & Push
+        id: build_frontend
+        run: |
+          IMG="${REGISTRY}/birthdayapp/frontend"
+          SHORT="${SHORT_SHA}"
+          if [ -n "${SEMVER}" ]; then
+            TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
+          else
+            TAGS=($IMG:sha-${SHORT})
+          fi
+          PRIMARY_TAG=${TAGS[0]}
+          docker build -t "$PRIMARY_TAG" "${{ env.FRONTEND_DIR }}"
+          if [ "$ALLOW_PUSH" != "true" ]; then
+            echo "Push skipped (not main/tag or disabled)."
+            echo "digest=" >> $GITHUB_OUTPUT
+          else
+            for t in "${TAGS[@]}"; do [ "$t" = "$PRIMARY_TAG" ] || docker tag "$PRIMARY_TAG" "$t"; done
+            for t in "${TAGS[@]}"; do docker push "$t"; done
+            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$PRIMARY_TAG" | awk -F'@' '{print $2}')
+            echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          fi
+      - name: Build Backend Image & Push
+        id: build_backend
+        run: |
+          IMG="${REGISTRY}/birthdayapp/backend"
+          SHORT="${SHORT_SHA}"
+          if [ -n "${SEMVER}" ]; then
+            TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
+          else
+            TAGS=($IMG:sha-${SHORT})
+          fi
+          PRIMARY_TAG=${TAGS[0]}
+          docker build -t "$PRIMARY_TAG" "${{ env.BACKEND_DIR }}"
+          if [ "$ALLOW_PUSH" != "true" ]; then
+            echo "Push skipped (not main/tag or disabled)."
+            echo "digest=" >> $GITHUB_OUTPUT
+          else
+            for t in "${TAGS[@]}"; do [ "$t" = "$PRIMARY_TAG" ] || docker tag "$PRIMARY_TAG" "$t"; done
+            for t in "${TAGS[@]}"; do docker push "$t"; done
+            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$PRIMARY_TAG" | awk -F'@' '{print $2}')
+            echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          fi
+      - id: digest_frontend
+        run: echo "digest=${{ steps.build_frontend.outputs.digest }}" >> $GITHUB_OUTPUT
+      - id: digest_backend
+        run: echo "digest=${{ steps.build_backend.outputs.digest }}" >> $GITHUB_OUTPUT
+      - name: Lint Helm Chart
+        run: |
+          helm lint charts/birthdayapp
+      - name: Package Helm Chart
+        run: |
+          mkdir -p dist
+          PKG_VERSION="${{ needs.setup.outputs.SEMVER }}"; if [ -z "$PKG_VERSION" ]; then PKG_VERSION="0.1.0+${{ needs.setup.outputs.SHORT_SHA }}"; fi
+          APP_VERSION="${{ needs.setup.outputs.SEMVER }}"; if [ -z "$APP_VERSION" ]; then APP_VERSION="${{ needs.setup.outputs.SHORT_SHA }}"; fi
+          helm package charts/birthdayapp --version "$PKG_VERSION" --app-version "$APP_VERSION" -d dist
+      - name: Upload Helm Chart Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart
+          path: dist/*.tgz
+    outputs:
+      FRONTEND_DIGEST: ${{ steps.digest_frontend.outputs.digest }}
+      BACKEND_DIGEST: ${{ steps.digest_backend.outputs.digest }}
+
+  deploy-dev:
+    runs-on: ubuntu-latest
+    environment: development
+    needs: [setup, build]
+    # Skip for pull_request events (dry build only). Allow for push/tag or manual dispatch based on inputs.
+    if: github.event_name != 'pull_request' && ( github.event_name != 'workflow_dispatch' || (github.event.inputs.deploy_to_dev == 'true' && github.event.inputs.push_images != 'false') )
+    env:
+      FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
+      BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
+      SEMVER: ${{ needs.setup.outputs.SEMVER }}
+      SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+      - name: Ensure namespace
+        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+      - name: Deploy with Helm (dev)
+        run: |
+          FRONT="$FRONTEND_DIGEST"
+          BACK="$BACKEND_DIGEST"
+          if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
+            echo "Image digests empty (build-only run). Skipping Helm deploy."; exit 0
+          fi
+          RELEASE=birthdayapp
+          CHART=./charts/birthdayapp
+          APP_VERSION="${SEMVER:-$SHORT_SHA}"
+          # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
+          helm upgrade --install "$RELEASE" "$CHART" \
+            --namespace "${NAMESPACE}" --create-namespace \
+            --set global.registry="${REGISTRY}" \
+            --set global.namespace="${NAMESPACE}" \
+            --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
+            --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
+            --set serviceAccountName=birthdayapp-sa \
+            --set appVersionOverride="$APP_VERSION" \
+            --history-max=10
+          kubectl rollout status deployment/frontend -n "${NAMESPACE}" --timeout=180s || true
+          kubectl rollout status deployment/backend -n "${NAMESPACE}" --timeout=180s || true
+
+  promote-prod:
+    runs-on: ubuntu-latest
+    needs: [ setup, build, deploy-dev ]
+    # Only run when this workflow was triggered by a semantic version tag (vX.Y.Z)
+    if: startsWith(github.ref, 'refs/tags/v') && needs.setup.outputs.SEMVER != ''
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Retag to prod tag
+        run: |
+          ACR_NAME=${REGISTRY%%.*}
+          FRONT=${{ needs.build.outputs.FRONTEND_DIGEST }}
+          BACK=${{ needs.build.outputs.BACKEND_DIGEST }}
+          az acr import -n "$ACR_NAME" --source ${REGISTRY}/birthdayapp/frontend@${FRONT} --image birthdayapp/frontend:prod --force
+          az acr import -n "$ACR_NAME" --source ${REGISTRY}/birthdayapp/backend@${BACK} --image birthdayapp/backend:prod --force
+      - name: Deploy to prod AKS with Helm
+        env:
+          PROD_NAMESPACE: ${{ vars.PROD_NAMESPACE }}
+          FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
+          BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
+          SEMVER: ${{ needs.setup.outputs.SEMVER }}
+        run: |
+          PROD_NS=${PROD_NAMESPACE:-birthdayapp}
+          az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
+          FRONT="$FRONTEND_DIGEST"
+          BACK="$BACKEND_DIGEST"
+          if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
+            echo "Missing digests; cannot deploy to prod."; exit 1
+          fi
+          RELEASE=birthdayapp
+          CHART=./charts/birthdayapp
+          APP_VERSION="$SEMVER"
+          # Use appVersionOverride for runtime version labeling
+          helm upgrade --install "$RELEASE" "$CHART" \
+            --namespace "$PROD_NS" --create-namespace \
+            --set global.registry="${REGISTRY}" \
+            --set global.namespace="$PROD_NS" \
+            --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
+            --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
+            --set serviceAccountName=birthdayapp-sa \
+            --set appVersionOverride="$APP_VERSION" \
+            --history-max=20
+          kubectl rollout status deployment/frontend -n "$PROD_NS" --timeout=180s || true
+          kubectl rollout status deployment/backend -n "$PROD_NS" --timeout=180s || true
+          echo "Prod deployment done. Version: $APP_VERSION"

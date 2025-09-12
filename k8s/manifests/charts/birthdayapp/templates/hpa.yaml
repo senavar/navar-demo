@@ -1,0 +1,43 @@
+{{- if .Values.image.backend.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: {{ include "birthdayapp.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: {{ .Values.image.backend.hpa.minReplicas }}
+  maxReplicas: {{ .Values.image.backend.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.image.backend.hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+---
+{{- if .Values.image.frontend.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: {{ include "birthdayapp.namespace" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: {{ .Values.image.frontend.hpa.minReplicas }}
+  maxReplicas: {{ .Values.image.frontend.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.image.frontend.hpa.targetCPUUtilizationPercentage }}
+{{- end }}

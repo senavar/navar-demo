@@ -1,0 +1,40 @@
+---
+# CiliumNetworkPolicy: backend pods
+# Allows ingress only from frontend and ingress-nginx; egress only to DNS and MongoDB.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: backend-cnp
+  namespace: birthdayapp
+spec:
+  endpointSelector:
+    matchLabels:
+      app: backend
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: frontend
+        - matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+  egress:
+    # DNS (kube-dns) - allow TCP/UDP 53
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # MongoDB VM 
+    - toCIDR:
+        - 10.10.3.4/32 
+      toPorts:
+        - ports:
+            - port: "27017"
+              protocol: TCP

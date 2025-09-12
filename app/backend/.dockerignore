@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.env
+.venv/
+.git
+.gitignore
+Dockerfile
+README.md
+BACKEND_SETUP.md
+instance/uploads/*
+*.log
+app/backend/src/archive/
+app/backend/src/templates/
+app/backend/src/

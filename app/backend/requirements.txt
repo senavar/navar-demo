@@ -1,0 +1,8 @@
+flask
+requests
+python-dotenv
+pymongo
+azure-storage-blob
+azure-identity
+azure-keyvault-secrets
+gunicorn

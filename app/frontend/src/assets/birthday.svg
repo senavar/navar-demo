@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Original SVG icon for birthday application.
+  License: MIT (user-owned, created by AI assistant). Safe for commercial & personal use.
+  Design goals: Simple, crisp at small sizes (favicon), scalable up to 256px.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  width="64"
+  height="64"
+  role="img"
+  aria-labelledby="title desc"
+  fill="none"
+>
+  <title id="title">birthday Icon</title>
+  <desc id="desc">A stylized birthday cake with a candle and confetti.</desc>
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#fff9f1" stroke="#f5d3a8" stroke-width="2" />
+
+  <!-- Cake base -->
+  <rect x="16" y="30" width="32" height="18" rx="3" ry="3" fill="#ffcc80" stroke="#d09034" stroke-width="2" />
+  <!-- Icing top drip -->
+  <path d="M18 30h28v4c0 2-2 4-4 2-2-2-3 2-6 2s-4-4-6-2-3 2-5 0c-1.5-1.5-2 1-4 1-1.5 0-3-1.5-3-3v-4z" fill="#ffe7d1" />
+  <path d="M18 30h28" stroke="#d09034" stroke-width="2" />
+
+  <!-- Candle -->
+  <rect x="30.5" y="20" width="3" height="10" rx="1" fill="#6a5acd" />
+  <!-- Flame -->
+  <path d="M32 16c1.8 2 2.5 3.3 2.5 4.6 0 1.8-1.2 3.4-2.5 3.4s-2.5-1.6-2.5-3.4C29.5 19.3 30.2 18 32 16z" fill="#ffb347" stroke="#ff8c00" stroke-width="0.5" />
+  <circle cx="32" cy="22.5" r="1" fill="#ffd27f" />
+
+  <!-- Sprinkles -->
+  <g stroke-linecap="round" stroke-width="2">
+    <line x1="22" y1="36" x2="22" y2="36" stroke="#ff6b6b" />
+    <line x1="26" y1="38" x2="26" y2="38" stroke="#6bc5ff" />
+    <line x1="30" y1="36" x2="30" y2="36" stroke="#6bff95" />
+    <line x1="34" y1="38" x2="34" y2="38" stroke="#ff6bf2" />
+    <line x1="38" y1="36" x2="38" y2="36" stroke="#ffa36b" />
+    <line x1="42" y1="38" x2="42" y2="38" stroke="#6b9bff" />
+  </g>
+
+  <!-- Confetti -->
+  <g stroke-width="2" stroke-linecap="round">
+    <path d="M12 18l2 2" stroke="#ff6b6b" />
+    <path d="M50 20l-2 2" stroke="#6bc5ff" />
+    <path d="M15 44l2 2" stroke="#6bff95" />
+    <path d="M48 42l-2 2" stroke="#ff8c00" />
+  </g>
+
+  <!-- Subtle shadow -->
+  <ellipse cx="32" cy="52" rx="14" ry="3" fill="#000" opacity="0.08" />
+</svg>

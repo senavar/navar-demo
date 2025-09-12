@@ -1,0 +1,89 @@
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 3.116.0"
+    }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = ">= 2.53.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.6.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.11.1"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+  subscription_id = "2850b25e-c1f8-45e0-b469-c0596a0deac6"
+}
+
+provider "azuread" {}
+
+# Core infrastructure module
+module "core" {
+  source = "./core"
+
+  environment                     = var.environment
+  location                        = var.location
+  vnet_address_space              = var.vnet_address_space
+  subnet_cidrs                    = var.subnet_cidrs
+  aks_system_node_count           = var.aks_system_node_count
+  aks_user_node_count             = var.aks_user_node_count
+  aks_system_vm_size              = var.aks_system_vm_size
+  aks_user_vm_size                = var.aks_user_vm_size
+  acr_sku                         = var.acr_sku
+  mongodb_vm_size                 = var.mongodb_vm_size
+  mongodb_admin_password          = var.mongodb_admin_password
+  linux_image                     = var.linux_image
+  admin_source_ips                = var.admin_source_ips
+  api_server_authorized_ip_ranges = var.api_server_authorized_ip_ranges
+}
+
+# Kubernetes add-ons module
+# (Workload Identity, ARC, ingress patching)
+module "k8s_addons" {
+  source = "./k8s-addons"
+
+  location                             = var.location
+  environment                          = var.environment
+  core_resource_group_name             = module.core.resource_group_name
+  core_aks_name                        = module.core.aks_name
+  core_key_vault_name                  = module.core.key_vault_name
+  aks_user_assigned_identity_client_id = module.core.aks_user_assigned_identity_client_id
+  app_service_account_namespace        = var.app_service_account_namespace
+  wi_service_account_name              = var.wi_service_account_name
+  arc_github_config_url                = var.arc_github_config_url
+  aks_host                             = module.core.aks_host
+  aks_cluster_ca                       = module.core.aks_cluster_ca
+  key_vault_id                         = module.core.key_vault_id
+  aks_oidc_issuer_url                  = module.core.aks_oidc_issuer_url
+}
+
+# 
+# Application Gateway module (depends on ingress private IP)
+module "appgw" {
+  source = "./appgw"
+
+  environment         = var.environment
+  resource_group_name = module.core.resource_group_name
+  location            = var.location
+  vnet_name           = module.core.virtual_network_name
+  appgw_subnet_id     = module.core.subnet_appgw_id
+  node_resource_group = module.core.node_resource_group
+  depends_on          = [module.k8s_addons]
+}
+
+# Aggregated Outputs
+output "resource_group_name" { value = module.core.resource_group_name }
+output "aks_name" { value = module.core.aks_name }
+output "key_vault_name" { value = module.core.key_vault_name }
+output "application_gateway_public_ip" { value = try(module.appgw.application_gateway_public_ip, null) }
+

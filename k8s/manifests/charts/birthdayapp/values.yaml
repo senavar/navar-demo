@@ -1,0 +1,71 @@
+# Global image registry (overridden via --set or env)
+global:
+  registry: ""
+  namespace: "birthdayapp"
+
+image:
+  frontend:
+    repository: birthdayapp/frontend
+    tag: "dev"          # default fallback
+    digest: ""          # if set will take precedence over tag
+    pullPolicy: IfNotPresent
+    replicas: 2
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 60
+  backend:
+    repository: birthdayapp/backend
+    tag: "dev"
+    digest: ""
+    pullPolicy: IfNotPresent
+    replicas: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+
+serviceAccountName: birthdayapp-sa
+
+ingress:
+  enabled: true
+  className: nginx-internal
+  host: birthday.losnavar.com
+
+networkPolicy:
+  backend:
+    enabled: true
+    mongoCIDR: 10.10.3.4/32
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+
+# Extra annotations for deployments
+annotations: {}
+
+# Optional override for version label (falls back to Chart.appVersion)
+appVersionOverride: ""

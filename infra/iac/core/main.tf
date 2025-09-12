@@ -1,0 +1,546 @@
+module "naming" {
+  source  = "Azure/naming/azurerm"
+  version = "~> 0.4.0"
+  suffix  = [var.environment, "navarlab"]
+}
+
+module "naming_mongodb" {
+  source  = "Azure/naming/azurerm"
+  version = "~> 0.4.0"
+  suffix  = [var.environment, "mongo"]
+}
+
+
+# Resource Group
+resource "azurerm_resource_group" "this" {
+  name     = module.naming.resource_group.name
+  location = var.location
+  tags = merge({
+    environment = var.environment
+    managed_by  = "terraform"
+  }, var.tags)
+}
+
+
+# Networking - VNet & Subnets
+resource "azurerm_virtual_network" "this" {
+  name                = module.naming.virtual_network.name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  address_space       = var.vnet_address_space
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_subnet" "aks_system" {
+  name                 = "snet-aks-system"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.subnet_cidrs.aks_system]
+}
+
+resource "azurerm_subnet" "aks_user" {
+  name                 = "snet-aks-app"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.subnet_cidrs.aks_user]
+}
+
+resource "azurerm_subnet" "appgw" {
+  name                 = "snet-appgw"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.subnet_cidrs.appgw]
+}
+
+resource "azurerm_subnet" "data" {
+  name                 = "snet-backend"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.subnet_cidrs.data]
+}
+
+resource "azurerm_subnet" "ops" {
+  name                 = "snet-ops"
+  resource_group_name  = azurerm_resource_group.this.name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.subnet_cidrs.ops]
+}
+
+resource "azurerm_role_assignment" "network_contributor_on_resource_group" {
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+  scope                = azurerm_resource_group.this.id
+  role_definition_name = "Network Contributor"
+}
+
+resource "azurerm_network_security_group" "appgw" {
+  name                = "nsg-appgw-${var.environment}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+  security_rule {
+    name                       = "AllowHTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "AllowHTTPS"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "AllowAppGwGatewayManager"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "65200-65535"
+    source_address_prefix      = "GatewayManager"
+    destination_address_prefix = "*"
+    description                = "Required for App Gateway v2 infrastructure provisioning"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "appgw" {
+  subnet_id                 = azurerm_subnet.appgw.id
+  network_security_group_id = azurerm_network_security_group.appgw.id
+}
+
+resource "azurerm_network_security_group" "ops" {
+  name                = "nsg-ops-${var.environment}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_subnet_network_security_group_association" "ops" {
+  subnet_id                 = azurerm_subnet.ops.id
+  network_security_group_id = azurerm_network_security_group.ops.id
+}
+
+# Key Vault
+resource "azurerm_key_vault" "this" {
+  name                       = module.naming.key_vault.name_unique
+  location                   = azurerm_resource_group.this.location
+  resource_group_name        = azurerm_resource_group.this.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = lower(var.key_vault_sku) == "premium" ? "premium" : "standard"
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 7
+  tags                       = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_role_assignment" "akv_admin" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# Key for etcd (AKS secret) encryption
+resource "azurerm_key_vault_key" "aks_etcd" {
+  name         = "kv-aks-etcd-cmk"
+  key_vault_id = azurerm_key_vault.this.id
+  key_type     = "RSA"
+  key_size     = 2048
+  key_opts     = ["decrypt", "encrypt", "wrapKey", "unwrapKey"]
+  depends_on   = [azurerm_role_assignment.akv_admin]
+}
+
+resource "azurerm_private_dns_zone" "kv" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+
+resource "azurerm_private_dns_zone_virtual_network_link" "kv" {
+  name                  = "link-kv-primary"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.kv.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+  registration_enabled  = false
+  tags                  = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_private_endpoint" "kv" {
+  name                = "pe-${azurerm_key_vault.this.name}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  subnet_id           = azurerm_subnet.ops.id
+  tags                = azurerm_resource_group.this.tags
+  private_service_connection {
+    name                           = "psc-kv"
+    private_connection_resource_id = azurerm_key_vault.this.id
+    is_manual_connection           = false
+    subresource_names              = ["vault"]
+  }
+  private_dns_zone_group {
+    name                 = "kv-dns"
+    private_dns_zone_ids = [azurerm_private_dns_zone.kv.id]
+  }
+  depends_on = [azurerm_private_dns_zone.kv, azurerm_key_vault_key.aks_etcd]
+}
+
+data "azurerm_client_config" "current" {}
+
+# Storage Account
+resource "azurerm_storage_account" "this" {
+  name                     = module.naming.storage_account.name_unique
+  resource_group_name      = azurerm_resource_group.this.name
+  location                 = azurerm_resource_group.this.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# Azure Container Registry
+resource "azurerm_container_registry" "this" {
+  name                = module.naming.container_registry.name_unique
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  sku                 = var.acr_sku
+  admin_enabled       = false
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_private_dns_zone" "acr" {
+  name                = "privatelink.azurecr.io"
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
+  name                  = "link-acr"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.acr.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+  registration_enabled  = false
+  tags                  = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_private_endpoint" "acr" {
+  name                = "pe-${azurerm_container_registry.this.name}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  subnet_id           = azurerm_subnet.ops.id
+  tags                = azurerm_resource_group.this.tags
+
+  private_service_connection {
+    name                           = "psc-acr"
+    private_connection_resource_id = azurerm_container_registry.this.id
+    is_manual_connection           = false
+    subresource_names              = ["registry"]
+  }
+
+  private_dns_zone_group {
+    name                 = "acr-dns"
+    private_dns_zone_ids = [azurerm_private_dns_zone.acr.id]
+  }
+}
+
+# Allow AKS kubelet identity to pull from ACR (if kubelet identity available)
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                = azurerm_container_registry.this.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id
+  depends_on           = [azurerm_kubernetes_cluster.this, azurerm_container_registry.this]
+}
+
+# AKS Cluster (basic skeleton; to be expanded with workload identity, node pools, RBAC)
+
+resource "azurerm_user_assigned_identity" "aks" {
+  name                = "uami-aks-${var.environment}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+# Grant Crypto User permissions to the KMS identity on the Key Vault
+resource "azurerm_role_assignment" "aks_kms_crypto" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Crypto User"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+}
+
+# Allow AKS user-assigned identity to retrieve secrets via CSI driver
+resource "azurerm_role_assignment" "aks_kv_secrets" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+}
+
+resource "azurerm_kubernetes_cluster" "this" {
+  name                      = module.naming.kubernetes_cluster.name
+  location                  = azurerm_resource_group.this.location
+  resource_group_name       = azurerm_resource_group.this.name
+  dns_prefix                = module.naming.kubernetes_cluster.name
+  private_cluster_enabled   = false
+  kubernetes_version        = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
+  local_account_disabled    = true
+  # Apply IP allow list only if user provided ranges (empty list leaves API open to Internet).
+  dynamic "api_server_access_profile" {
+    for_each = length(var.api_server_authorized_ip_ranges) == 0 ? [] : [1]
+    content {
+      authorized_ip_ranges = var.api_server_authorized_ip_ranges
+    }
+  }
+
+  # Etcd secret encryption via Azure Key Vault KMS (customer-managed key)
+  key_management_service {
+    key_vault_key_id         = azurerm_key_vault_key.aks_etcd.id
+    key_vault_network_access = "Public"
+  }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.aks.id]
+  }
+
+  # Enable Key Vault CSI Secrets Provider addon
+  key_vault_secrets_provider {
+    secret_rotation_enabled = false
+  }
+
+  default_node_pool {
+    name                 = "system"
+    node_count           = var.aks_system_node_count
+    vm_size              = var.aks_system_vm_size
+    vnet_subnet_id       = azurerm_subnet.aks_system.id
+    orchestrator_version = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
+    os_disk_size_gb      = 128
+    os_sku               = "AzureLinux"
+    type                 = "VirtualMachineScaleSets"
+    upgrade_settings { max_surge = "33%" }
+  }
+
+  network_profile {
+    network_plugin      = "azure"
+    network_plugin_mode = "overlay"
+    network_policy      = "cilium"
+    network_data_plane  = "cilium"
+    pod_cidr            = var.aks_pod_cidr
+    dns_service_ip      = "10.0.0.10"
+    service_cidr        = "10.0.0.0/16"
+    outbound_type       = var.aks_outbound_type
+  }
+
+  azure_active_directory_role_based_access_control {
+    azure_rbac_enabled     = true
+    tenant_id              = data.azurerm_client_config.current.tenant_id
+    admin_group_object_ids = ["5c576027-265f-4f90-9f68-32dbc34dfa24"]
+  }
+
+  web_app_routing {
+    dns_zone_ids = [azurerm_private_dns_zone.webapp_routing.id]
+  }
+
+  tags = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "user" {
+  name                  = "user"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = var.aks_user_vm_size
+  node_count            = var.aks_user_node_count
+  os_sku                = "AzureLinux"
+  vnet_subnet_id        = azurerm_subnet.aks_user.id
+  orchestrator_version  = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
+  mode                  = "User"
+  tags                  = azurerm_resource_group.this.tags
+}
+
+
+resource "azurerm_role_assignment" "cluster_admin" {
+  scope                = azurerm_kubernetes_cluster.this.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = "5c576027-265f-4f90-9f68-32dbc34dfa24"
+}
+
+
+# Private DNS Zone for Web App Routing (Ingress)
+resource "azurerm_private_dns_zone" "webapp_routing" {
+  name                = var.web_app_routing_zone_name
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "webapp_routing" {
+  name                  = "link-webapp-routing"
+  resource_group_name   = azurerm_resource_group.this.name
+  private_dns_zone_name = azurerm_private_dns_zone.webapp_routing.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+  registration_enabled  = false
+  tags                  = azurerm_resource_group.this.tags
+}
+
+
+# MongoDB VM (Linux)
+resource "azurerm_network_security_group" "mongodb" {
+  name                = module.naming_mongodb.network_security_group.name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+  security_rule {
+    name                       = "AllowSSHAdminIPs"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefixes    = var.admin_source_ips
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "AllowMongoFromVNet"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "27017"
+    source_address_prefix      = tolist(azurerm_virtual_network.this.address_space)[0]
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_subnet_network_security_group_association" "mongodb" {
+  subnet_id                 = azurerm_subnet.data.id
+  network_security_group_id = azurerm_network_security_group.mongodb.id
+}
+
+resource "azurerm_network_interface" "mongodb" {
+  name                = module.naming_mongodb.network_interface.name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  ip_configuration {
+    name                          = "ipconfig"
+    subnet_id                     = azurerm_subnet.data.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.mongodb.id
+  }
+  tags = azurerm_resource_group.this.tags
+}
+
+# User-assigned identity for MongoDB VM
+resource "azurerm_user_assigned_identity" "mongodb" {
+  name                = "uami-mongodb-${var.environment}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_public_ip" "mongodb" {
+  name                = module.naming_mongodb.public_ip.name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  tags                = azurerm_resource_group.this.tags
+}
+
+resource "azurerm_linux_virtual_machine" "mongodb" {
+  name                            = module.naming_mongodb.virtual_machine.name
+  resource_group_name             = azurerm_resource_group.this.name
+  location                        = azurerm_resource_group.this.location
+  size                            = var.mongodb_vm_size
+  admin_username                  = var.mongodb_admin_username
+  disable_password_authentication = var.ssh_public_key != ""
+  network_interface_ids           = [azurerm_network_interface.mongodb.id]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
+    disk_size_gb         = var.mongodb_disk_size_gb
+  }
+  source_image_reference {
+    publisher = var.linux_image.publisher
+    offer     = var.linux_image.offer
+    sku       = var.linux_image.sku
+    version   = var.linux_image.version
+  }
+
+  plan {
+    name      = var.linux_image.sku
+    product   = var.linux_image.offer
+    publisher = var.linux_image.publisher
+  }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.mongodb.id]
+  }
+
+  custom_data = base64encode(templatefile("${path.module}/scripts/mongodb-install.sh", {
+    kv_name        = azurerm_key_vault.this.name
+    secret_name    = "mongo-conn-string"
+    app_user       = var.mongodb_admin_username
+    private_ip     = azurerm_network_interface.mongodb.private_ip_address
+    uami_client_id = azurerm_user_assigned_identity.mongodb.client_id
+  }))
+
+  dynamic "admin_ssh_key" {
+    for_each = var.ssh_public_key != "" ? [1] : []
+    content {
+      username   = var.mongodb_admin_username
+      public_key = var.ssh_public_key
+    }
+  }
+  admin_password = var.ssh_public_key == "" ? var.mongodb_admin_password : null
+  tags           = azurerm_resource_group.this.tags
+
+  depends_on = [
+    azurerm_role_assignment.mongodb_kv_secret_officer,
+    azurerm_role_assignment.mongodb_owner
+  ]
+}
+
+resource "azurerm_role_assignment" "mongodb_kv_secret_officer" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = azurerm_user_assigned_identity.mongodb.principal_id
+}
+
+resource "azurerm_role_assignment" "mongodb_owner" {
+  scope                = azurerm_resource_group.this.id
+  role_definition_name = "Owner"
+  principal_id         = azurerm_user_assigned_identity.mongodb.principal_id
+}
+
+# Outputs 
+output "resource_group_name" { value = azurerm_resource_group.this.name }
+output "aks_name" { value = azurerm_kubernetes_cluster.this.name }
+output "acr_name" { value = azurerm_container_registry.this.name }
+output "acr_private_endpoint_id" { value = azurerm_private_endpoint.acr.id }
+output "key_vault_name" { value = azurerm_key_vault.this.name }
+output "key_vault_private_endpoint_id" { value = azurerm_private_endpoint.kv.id }
+output "mongodb_private_ip" { value = azurerm_network_interface.mongodb.private_ip_address }
+output "aks_kubelet_identity_object_id" { value = azurerm_kubernetes_cluster.this.kubelet_identity[0].object_id }
+output "virtual_network_id" { value = azurerm_virtual_network.this.id }
+output "virtual_network_name" { value = azurerm_virtual_network.this.name }
+output "subnet_appgw_id" { value = azurerm_subnet.appgw.id }
+output "subnet_appgw_name" { value = azurerm_subnet.appgw.name }
+output "aks_principal_id" { value = azurerm_kubernetes_cluster.this.identity[0].principal_id }
+output "aks_oidc_issuer_url" { value = azurerm_kubernetes_cluster.this.oidc_issuer_url }
+output "aks_api_restricted" { value = length(var.api_server_authorized_ip_ranges) > 0 }
+output "aks_etcd_cmk_key_id" { value = azurerm_key_vault_key.aks_etcd.id }
+output "aks_kms_identity_principal_id" { value = azurerm_user_assigned_identity.aks.principal_id }
+output "aks_user_assigned_identity_client_id" { value = azurerm_user_assigned_identity.aks.client_id }
+output "aks_host" { value = azurerm_kubernetes_cluster.this.kube_config[0].host }
+output "aks_cluster_ca" { value = azurerm_kubernetes_cluster.this.kube_config[0].cluster_ca_certificate }
+output "key_vault_id" { value = azurerm_key_vault.this.id }
+output "node_resource_group" { value = azurerm_kubernetes_cluster.this.node_resource_group }

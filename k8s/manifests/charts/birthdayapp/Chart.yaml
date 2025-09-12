@@ -1,0 +1,16 @@
+apiVersion: v2
+name: birthdayapp
+description: Birthday application (frontend + backend) Helm chart
+type: application
+version: 0.1.0
+# appVersion will be overridden in CI with semantic version or short SHA
+appVersion: "dev"
+home: https://example.com/birthdayapp
+keywords:
+  - birthday
+  - demo
+sources:
+  - https://github.com/senavar/navar-demo
+maintainers:
+  - name: platform-team
+    email: platform@example.com

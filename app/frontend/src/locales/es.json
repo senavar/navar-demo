@@ -1,0 +1,61 @@
+{
+  "appTitle": "Feliz Cumpleaños! - Demo de Wiz",
+  "listView": "Lista",
+  "calendarView": "Calendario",
+  "errorFetching": "Error al obtener los cumpleaños",
+  "addBirthdayTitle": "Añadir un Nuevo Cumpleaños",
+  "namePlaceholder": "Nombre",
+  "yearPlaceholder": "Año",
+  "monthPlaceholder": "Mes",
+  "dayPlaceholder": "Día",
+  "addButton": "Añadir Cumpleaños",
+  "addingButton": "Añadiendo...",
+  "noBirthdays": "Aún no hay cumpleaños. ¡Añade uno abajo!",
+  "onDate": "{weekday}, {day} de {month} de {year}",
+  "turnsAge": "Cumple {age}",
+  "prev": "Ant",
+  "next": "Sig",
+  "upcomingBirthdays": "Próximos Cumpleaños",
+  "errorInvalidDayInMonth": "Día inválido. {monthName} de {year} solo tiene {daysInMonth} días.",
+  "daysUntilNextBirthday": "en {count} día(s)",
+  "cancel": "Cancelar",
+  "comparison": {
+    "title": "Comparación de Edad",
+    "selectTwo": "Selecciona dos o más personas para comparar sus edades.",
+    "isOlderThan": "es mayor que",
+    "by": "por",
+    "years": "{count} año | {count} años",
+    "months": "{count} mes | {count} meses",
+    "days": "{count} día | {count} días",
+    "sameDay": "menos de un día"
+  },
+  "errorInvalidFileType": "Tipo de imagen es inválido. Por favor, selecciona una imagen JPEG, JPG, o PNG.",
+  "errorFileTooLarge": "La imagen es demasiado grande. Por favor, selecciona un imagen de menos de {size}.",
+  "profilePictureLabel": "Subir Imagen (opcional)",
+  "changePicture": "Cambiar Foto",
+  "cropImageTitle": "Ajustar Foto",
+  "editPicture": "Editar",
+  "confirmCrop": "Confirmar",
+  "submitButton": "Subir",
+  "admin": {
+    "title": "Portal de Administración",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "confirmDelete": "¿Estás seguro de que quieres eliminar la entrada de {name}?",
+    "editTitle": "Editar {name}",
+    "changePhoto": "Cambiar Foto",
+    "table": {
+      "photo": "Foto",
+      "name": "Nombre",
+      "birthday": "Cumpleaños",
+      "actions": "Acciones"
+    }
+  },
+  "wiz": {
+    "button": "Ejercicio Wiz",
+    "title": "Archivo de Ejercicio Wiz",
+    "loading": "Cargando...",
+    "close": "Cerrar",
+    "pathLabel": "Ruta en el contenedor"
+  }
+}
