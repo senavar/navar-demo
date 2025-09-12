@@ -341,7 +341,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   azure_active_directory_role_based_access_control {
     azure_rbac_enabled     = true
     tenant_id              = data.azurerm_client_config.current.tenant_id
-    admin_group_object_ids = ["5c576027-265f-4f90-9f68-32dbc34dfa24"]
+    admin_group_object_ids = ["fb0906fe-3df0-4a0c-8c2f-2e52d33d549f"]
   }
 
   web_app_routing {
@@ -367,7 +367,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
 resource "azurerm_role_assignment" "cluster_admin" {
   scope                = azurerm_kubernetes_cluster.this.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
-  principal_id         = "5c576027-265f-4f90-9f68-32dbc34dfa24"
+  principal_id         = "fb0906fe-3df0-4a0c-8c2f-2e52d33d549f"
 }
 
 

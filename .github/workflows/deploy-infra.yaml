@@ -1,4 +1,4 @@
-name: Deploy Azure Infrastructure
+name: Azure Infrastructure CI/CD Pipeline
 
 on:
   push:
