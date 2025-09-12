@@ -79,7 +79,7 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
       - name: Plan Core (Dev)
-        run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core
+        run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
       - name: Plan Full (Dev)
@@ -123,7 +123,7 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
       - name: Plan Core (Prod)
-        run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core
+        run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
       - name: Plan Full (Prod)
