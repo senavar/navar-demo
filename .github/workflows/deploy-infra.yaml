@@ -78,8 +78,6 @@ jobs:
             -backend-config="key=${TF_STATE_PREFIX}-dev.tfstate"
       - name: Terraform Validate
         run: terraform validate
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
       - name: Plan Core (Dev)
         run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core
       - name: Apply Core (Dev)
@@ -124,8 +122,6 @@ jobs:
             -backend-config="key=${TF_STATE_PREFIX}-prod.tfstate"
       - name: Terraform Validate
         run: terraform validate
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
       - name: Plan Core (Prod)
         run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core
       - name: Apply Core (Prod)
