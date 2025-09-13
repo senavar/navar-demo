@@ -18,6 +18,7 @@ terraform {
       version = ">= 0.11.1"
     }
   }
+  backend "azurerm" {}
 }
 
 provider "azurerm" {

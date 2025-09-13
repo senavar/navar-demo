@@ -27,7 +27,7 @@ env:
   TF_STATE_RESOURCE_GROUP: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
   TF_STATE_STORAGE_ACCOUNT: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
   TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-  TF_STATE_PREFIX: core 
+  TF_STATE_PREFIX: core
 
 concurrency:
   group: infra-terraform
@@ -85,8 +85,8 @@ jobs:
       - name: Fetch AKS Credentials (Dev)
         run: |
           echo "Reading AKS outputs from Terraform state (dev)";
-          AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
-          AKS_RESOURCE_GROUP=$(terraform output -raw aks_resource_group_name)
+          AKS_CLUSTER_NAME=$(terraform output -raw aks_name)
+          AKS_RESOURCE_GROUP=$(terraform output -raw resource_group_name)
           echo "AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME" >> $GITHUB_ENV
           echo "AKS_RESOURCE_GROUP=$AKS_RESOURCE_GROUP" >> $GITHUB_ENV
           echo "Retrieving AKS credentials for $AKS_CLUSTER_NAME in $AKS_RESOURCE_GROUP"
@@ -143,8 +143,8 @@ jobs:
       - name: Fetch AKS Credentials (Prod)
         run: |
           echo "Reading AKS outputs from Terraform state (prod)";
-          AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
-          AKS_RESOURCE_GROUP=$(terraform output -raw aks_resource_group_name)
+          AKS_CLUSTER_NAME=$(terraform output -raw aks_name)
+          AKS_RESOURCE_GROUP=$(terraform output -raw resource_group_name)
           echo "AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME" >> $GITHUB_ENV
           echo "AKS_RESOURCE_GROUP=$AKS_RESOURCE_GROUP" >> $GITHUB_ENV
           echo "Retrieving AKS credentials for $AKS_CLUSTER_NAME in $AKS_RESOURCE_GROUP"
