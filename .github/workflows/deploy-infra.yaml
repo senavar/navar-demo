@@ -83,12 +83,19 @@ jobs:
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
       - name: Fetch AKS Credentials (Dev)
-        # Assumes terraform outputs aks_resource_group_name and aks_cluster_name are defined after core apply
         run: |
-          RG_NAME=$(terraform output -raw aks_resource_group_name)
-          CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
-          echo "Retrieving AKS credentials for $CLUSTER_NAME in $RG_NAME"
-          az aks get-credentials --resource-group "$RG_NAME" --name "$CLUSTER_NAME" --overwrite-existing
+          echo "Reading AKS outputs from Terraform state (dev)";
+          AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
+          AKS_RESOURCE_GROUP=$(terraform output -raw aks_resource_group_name)
+          echo "AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME" >> $GITHUB_ENV
+          echo "AKS_RESOURCE_GROUP=$AKS_RESOURCE_GROUP" >> $GITHUB_ENV
+          echo "Retrieving AKS credentials for $AKS_CLUSTER_NAME in $AKS_RESOURCE_GROUP"
+          for i in 1 2 3; do
+            if az aks get-credentials -g "$AKS_RESOURCE_GROUP" -n "$AKS_CLUSTER_NAME" --overwrite-existing; then
+              break
+            fi
+            echo "Attempt $i failed, retrying in 15s..." && sleep 15
+          done
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -134,12 +141,19 @@ jobs:
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
       - name: Fetch AKS Credentials (Prod)
-        # Assumes terraform outputs aks_resource_group_name and aks_cluster_name are defined after core apply
         run: |
-          RG_NAME=$(terraform output -raw aks_resource_group_name)
-          CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
-          echo "Retrieving AKS credentials for $CLUSTER_NAME in $RG_NAME"
-          az aks get-credentials --resource-group "$RG_NAME" --name "$CLUSTER_NAME" --overwrite-existing
+          echo "Reading AKS outputs from Terraform state (prod)";
+          AKS_CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
+          AKS_RESOURCE_GROUP=$(terraform output -raw aks_resource_group_name)
+          echo "AKS_CLUSTER_NAME=$AKS_CLUSTER_NAME" >> $GITHUB_ENV
+          echo "AKS_RESOURCE_GROUP=$AKS_RESOURCE_GROUP" >> $GITHUB_ENV
+          echo "Retrieving AKS credentials for $AKS_CLUSTER_NAME in $AKS_RESOURCE_GROUP"
+          for i in 1 2 3; do
+            if az aks get-credentials -g "$AKS_RESOURCE_GROUP" -n "$AKS_CLUSTER_NAME" --overwrite-existing; then
+              break
+            fi
+            echo "Attempt $i failed, retrying in 15s..." && sleep 15
+          done
       - name: Plan Full (Prod)
         id: plan-full
         run: |
