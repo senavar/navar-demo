@@ -30,10 +30,11 @@ permissions:
   security-events: write
 
 env:
-  REGISTRY: ${{ vars.REGISTRY_LOGIN_SERVER }}
+  REGISTRY_DEV: ${{ vars.REGISTRY_DEV}}
+  REGISTRY_PROD: ${{ vars.REGISTRY_PROD }}
+  NAMESPACE: ${{ vars.NAMESPACE }}
   FRONTEND_DIR: app/frontend
   BACKEND_DIR: app/backend
-  NAMESPACE: ${{ vars.NAMESPACE }}
 
 jobs:
   scan:
@@ -114,7 +115,6 @@ jobs:
           echo "allow_push=$ALLOW" >> $GITHUB_OUTPUT
           echo "ALLOW_PUSH=$ALLOW" >> $GITHUB_ENV
       - name: Azure Login
-        # Only authenticate to Azure when we intend to push images (saves time on feature branches / dry runs)
         if: steps.pushpolicy.outputs.allow_push == 'true'
         uses: azure/login@v2
         with:
@@ -122,13 +122,13 @@ jobs:
       - name: ACR Login
         if: steps.pushpolicy.outputs.allow_push == 'true'
         run: |
-          ACR_NAME=${REGISTRY%%.*}
-          echo "Logging into ACR: $ACR_NAME"
+          ACR_NAME=${REGISTRY_DEV%%.*}
+          echo "Logging into Dev ACR: $ACR_NAME (${REGISTRY_DEV})"
           az acr login --name "$ACR_NAME"
       - name: Build Frontend Image & Push
         id: build_frontend
         run: |
-          IMG="${REGISTRY}/birthdayapp/frontend"
+          IMG="${REGISTRY_DEV}/birthdayapp/frontend"
           SHORT="${SHORT_SHA}"
           if [ -n "${SEMVER}" ]; then
             TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
@@ -149,7 +149,7 @@ jobs:
       - name: Build Backend Image & Push
         id: build_backend
         run: |
-          IMG="${REGISTRY}/birthdayapp/backend"
+          IMG="${REGISTRY_DEV}/birthdayapp/backend"
           SHORT="${SHORT_SHA}"
           if [ -n "${SEMVER}" ]; then
             TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
@@ -227,7 +227,7 @@ jobs:
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
           helm upgrade --install "$RELEASE" "$CHART" \
             --namespace "${NAMESPACE}" --create-namespace \
-            --set global.registry="${REGISTRY}" \
+            --set global.registry="${REGISTRY_DEV}" \
             --set global.namespace="${NAMESPACE}" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
@@ -253,21 +253,36 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Retag to prod tag
+      - name: Promote images to prod ACR
         run: |
-          ACR_NAME=${REGISTRY%%.*}
+          DEV_ACR_NAME=${REGISTRY_DEV%%.*}
+          PROD_ACR_NAME=${REGISTRY_PROD%%.*}
           FRONT=${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACK=${{ needs.build.outputs.BACKEND_DIGEST }}
-          az acr import -n "$ACR_NAME" --source ${REGISTRY}/birthdayapp/frontend@${FRONT} --image birthdayapp/frontend:prod --force
-          az acr import -n "$ACR_NAME" --source ${REGISTRY}/birthdayapp/backend@${BACK} --image birthdayapp/backend:prod --force
+          if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
+            echo "Missing digest(s); cannot promote." >&2
+            exit 1
+          fi
+          echo "Logging into Dev ACR ($DEV_ACR_NAME) and Prod ACR ($PROD_ACR_NAME)"
+          az acr login -n "$DEV_ACR_NAME"
+          az acr login -n "$PROD_ACR_NAME"
+          echo "Pulling by digest from DEV registry"
+          docker pull ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT}
+          docker pull ${REGISTRY_DEV}/birthdayapp/backend@${BACK}
+          echo "Retagging for PROD registry"
+          docker tag ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT} ${REGISTRY_PROD}/birthdayapp/frontend:prod
+          docker tag ${REGISTRY_DEV}/birthdayapp/backend@${BACK} ${REGISTRY_PROD}/birthdayapp/backend:prod
+          echo "Pushing to PROD registry"
+          docker push ${REGISTRY_PROD}/birthdayapp/frontend:prod
+          docker push ${REGISTRY_PROD}/birthdayapp/backend:prod
+          echo "Promotion push complete"
       - name: Deploy to prod AKS with Helm
         env:
-          PROD_NAMESPACE: ${{ vars.PROD_NAMESPACE }}
           FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
         run: |
-          PROD_NS=${PROD_NAMESPACE:-birthdayapp}
+          PROD_NS="${NAMESPACE:-birthdayapp}" # PROD_NAMESPACE can be injected later if desired
           sudo az aks install-cli
           export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
@@ -283,7 +298,7 @@ jobs:
           # Use appVersionOverride for runtime version labeling
           helm upgrade --install "$RELEASE" "$CHART" \
             --namespace "$PROD_NS" --create-namespace \
-            --set global.registry="${REGISTRY}" \
+            --set global.registry="${REGISTRY_PROD}" \
             --set global.namespace="$PROD_NS" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
