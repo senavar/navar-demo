@@ -292,12 +292,12 @@ resource "azurerm_kubernetes_cluster" "this" {
   workload_identity_enabled = true
   local_account_disabled    = true
   # Apply IP allow list only if user provided ranges (empty list leaves API open to Internet).
-  dynamic "api_server_access_profile" {
-    for_each = length(var.api_server_authorized_ip_ranges) == 0 ? [] : [1]
-    content {
-      authorized_ip_ranges = var.api_server_authorized_ip_ranges
-    }
-  }
+  #dynamic "api_server_access_profile" {
+  #  for_each = length(var.api_server_authorized_ip_ranges) == 0 ? [] : [1]
+  #  content {
+  #    authorized_ip_ranges = var.api_server_authorized_ip_ranges
+  #  }
+  #}
 
   # Etcd secret encryption via Azure Key Vault KMS (customer-managed key)
   key_management_service {
