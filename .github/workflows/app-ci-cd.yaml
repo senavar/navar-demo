@@ -214,7 +214,9 @@ jobs:
         run: |
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
-          az aks install-cli
+          sudo az aks install-cli
+          export PATH="/usr/local/bin:$PATH"
+          kubelogin convert-kubeconfig -l azurecli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
             echo "Image digests empty (build-only run). Skipping Helm deploy."; exit 0
@@ -266,7 +268,9 @@ jobs:
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
         run: |
           PROD_NS=${PROD_NAMESPACE:-birthdayapp}
-          az aks install-cli
+          sudo az aks install-cli
+          export PATH="/usr/local/bin:$PATH"
+          kubelogin convert-kubeconfig -l azurecli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
