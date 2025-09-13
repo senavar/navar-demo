@@ -87,8 +87,8 @@ jobs:
         run: |
           sudo az aks install-cli
           export PATH="/usr/local/bin:$PATH"
-          kubelogin convert-kubeconfig -l azurecli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
+          kubelogin convert-kubeconfig -l azurecli
           terraform plan -var-file=dev.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
             echo "is_empty=true" >> $GITHUB_OUTPUT
@@ -135,8 +135,8 @@ jobs:
         run: |
           sudo az aks install-cli
           export PATH="/usr/local/bin:$PATH"
+          az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
-          az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           terraform plan -var-file=prod.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
             echo "is_empty=true" >> $GITHUB_OUTPUT
