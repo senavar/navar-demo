@@ -82,6 +82,13 @@ jobs:
         run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
+      - name: Fetch AKS Credentials (Dev)
+        # Assumes terraform outputs aks_resource_group_name and aks_cluster_name are defined after core apply
+        run: |
+          RG_NAME=$(terraform output -raw aks_resource_group_name)
+          CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
+          echo "Retrieving AKS credentials for $CLUSTER_NAME in $RG_NAME"
+          az aks get-credentials --resource-group "$RG_NAME" --name "$CLUSTER_NAME" --overwrite-existing
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -126,6 +133,13 @@ jobs:
         run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
+      - name: Fetch AKS Credentials (Prod)
+        # Assumes terraform outputs aks_resource_group_name and aks_cluster_name are defined after core apply
+        run: |
+          RG_NAME=$(terraform output -raw aks_resource_group_name)
+          CLUSTER_NAME=$(terraform output -raw aks_cluster_name)
+          echo "Retrieving AKS credentials for $CLUSTER_NAME in $RG_NAME"
+          az aks get-credentials --resource-group "$RG_NAME" --name "$CLUSTER_NAME" --overwrite-existing
       - name: Plan Full (Prod)
         id: plan-full
         run: |
