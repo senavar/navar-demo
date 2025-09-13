@@ -103,7 +103,7 @@ jobs:
     name: 'Terraform Infra for Prod'
     runs-on: ubuntu-latest
     needs: terraform-dev
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_prod == 'true')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.run_prod)
     environment: production
     defaults:
       run:
