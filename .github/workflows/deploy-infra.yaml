@@ -85,7 +85,7 @@ jobs:
       - name: Plan Full (Dev)
         id: plan-full
         run: |
-          sleep 60
+          az aks install-cli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           terraform plan -var-file=dev.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
@@ -131,7 +131,7 @@ jobs:
       - name: Plan Full (Prod)
         id: plan-full
         run: |
-          sleep 60
+          az aks install-cli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           terraform plan -var-file=prod.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then

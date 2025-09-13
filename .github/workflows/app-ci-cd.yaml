@@ -210,17 +210,12 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Set AKS context
-        uses: azure/aks-set-context@v4
-        with:
-          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
-      - name: Ensure namespace
-        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
       - name: Deploy with Helm (dev)
         run: |
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
+          az aks install-cli
+          az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
             echo "Image digests empty (build-only run). Skipping Helm deploy."; exit 0
           fi
@@ -271,6 +266,7 @@ jobs:
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
         run: |
           PROD_NS=${PROD_NAMESPACE:-birthdayapp}
+          az aks install-cli
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
