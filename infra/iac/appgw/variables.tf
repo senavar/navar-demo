@@ -1,3 +1,4 @@
+
 variable "resource_group_name" {
   type        = string
   description = "Resource group for the Application Gateway"
@@ -39,8 +40,24 @@ variable "probe_path" {
   default     = "/healthz"
 }
 
-variable "frontend_host" {
-  type        = string
+variable "frontend_hosts" {
+  type        = list(string)
   description = "Primary host (FQDN) served by the ingress; used as Host header in App Gateway health probe so NGINX returns 200 instead of default backend/404."
-  default     = "birthday.losnavar.com"
+  default     = ["birthday.losnavar.com", "*.birthday.losnavar.com"]
+}
+
+variable "key_vault_id" {
+  type        = string
+  description = "Resource ID of the Key Vault storing the TLS certificate secret."
+}
+
+variable "appgw_uami_id" {
+  type        = string
+  description = "Resource ID of the user-assigned managed identity for Application Gateway."
+}
+
+variable "certificate_secret_name" {
+  type        = string
+  description = "Name of the Key Vault secret containing the TLS certificate."
+  default     = "APP_TLS_CERT"
 }

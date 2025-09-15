@@ -64,49 +64,6 @@ variable "core_key_vault_name" {
   description = "Key Vault name (still required for certain references or naming conventions)."
   type        = string
 }
-
-variable "arc_controller_namespace" {
-  description = "Namespace for ARC controller components (operator)."
-  type        = string
-  default     = "arc-systems"
-}
-
-variable "arc_runners_namespace" {
-  description = "Namespace for ARC runner scale sets (work pods)."
-  type        = string
-  default     = "arc-runners"
-}
-
-variable "arc_chart_version" {
-  description = "Specific Helm chart version for ARC Helm chart (blank = latest)."
-  type        = string
-  default     = ""
-}
-
-variable "arc_github_config_url" {
-  description = "GitHub configuration URL (org, enterprise, or repo) referenced by ARC."
-  type        = string
-  default     = ""
-}
-
-variable "arc_runner_scale_set_name" {
-  description = "Helm release / runs-on label for ARC runner scale set."
-  type        = string
-  default     = "arc-runner-set"
-}
-
-variable "arc_controller_release_name" {
-  description = "Helm release name for ARC controller installation."
-  type        = string
-  default     = "arc"
-}
-
-variable "arc_pat_key_vault_secret_name" {
-  description = "Key Vault secret name storing the GitHub PAT for ARC (referenced by CSI)."
-  type        = string
-  default     = "arc-aks"
-}
-
 variable "aks_user_assigned_identity_client_id" {
   description = "Client ID of the AKS user-assigned identity (for SecretProviderClass / CSI driver)."
   type        = string

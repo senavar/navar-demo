@@ -82,6 +82,17 @@ jobs:
         run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
+      - name: Import PFX into Key Vault (creates new version if exists)
+        run: |
+          KV_NAME=$(terraform output -raw key_vault_name)
+          CERT_NAME="APP_TLS_CERT"
+          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
+          if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
+            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+          else
+            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx
+          fi
+          rm -f cert.pfx
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -98,6 +109,14 @@ jobs:
       - name: Apply Full (Dev)
         if: steps.plan-full.outputs.is_empty == 'false'
         run: terraform apply -auto-approve tfplan-full
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Kubernetes Cluster Add-Ons
+        env:
+          GITHUB_PAT: ${{ secrets.GH_RUNNER_PAT }}
+          GITHUB_TARGET: your-org   # or your-org/your-repo
+        run: ./k8s/bootstrap/cluster_addons.sh
 
   terraform-prod:
     name: 'Terraform Infra for Prod'
@@ -130,6 +149,17 @@ jobs:
         run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
+      - name: Import PFX into Key Vault (creates new version if exists)
+        run: |
+          KV_NAME=$(terraform output -raw key_vault_name)
+          CERT_NAME="APP_TLS_CERT"
+          echo "$${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
+          if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
+            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+          else
+            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx
+          fi
+          rm -f cert.pfx
       - name: Plan Full (Prod)
         id: plan-full
         run: |
@@ -146,3 +176,11 @@ jobs:
       - name: Apply Full (Prod)
         if: steps.plan-full.outputs.is_empty == 'false'
         run: terraform apply -auto-approve tfplan-full
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Kubernetes Cluster Add-Ons
+        env:
+          GITHUB_PAT: ${{ secrets.GH_RUNNER_PAT }}
+          GITHUB_TARGET: "https://github.com/senavar/navar-demo"
+        run: ./k8s/bootstrap/cluster_addons.sh

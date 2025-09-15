@@ -10,6 +10,7 @@ module "naming_mongodb" {
   suffix  = [var.environment, "mongo"]
 }
 
+data "azurerm_client_config" "current" {}
 
 # Resource Group
 resource "azurerm_resource_group" "this" {
@@ -194,7 +195,6 @@ resource "azurerm_private_endpoint" "kv" {
   depends_on = [azurerm_private_dns_zone.kv, azurerm_key_vault_key.aks_etcd]
 }
 
-data "azurerm_client_config" "current" {}
 
 # Storage Account
 resource "azurerm_storage_account" "this" {
@@ -324,7 +324,10 @@ resource "azurerm_kubernetes_cluster" "this" {
     os_disk_size_gb      = 128
     os_sku               = "AzureLinux"
     type                 = "VirtualMachineScaleSets"
-    upgrade_settings { max_surge = "33%" }
+
+    upgrade_settings {
+      max_surge = "10%"
+    }
   }
 
   network_profile {
@@ -363,6 +366,26 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
   tags                  = azurerm_resource_group.this.tags
 }
 
+resource "azapi_update_resource" "aks_cluster_patch_acns" {
+  type        = "Microsoft.ContainerService/ManagedClusters@2024-09-01"
+  resource_id = azurerm_kubernetes_cluster.this.id
+  depends_on  = [azurerm_kubernetes_cluster_node_pool.user]
+  body = {
+    properties = {
+      networkProfile = {
+        advancedNetworking = {
+          enabled = true
+          observability = {
+            enabled = true
+          }
+          security = {
+            enabled = false
+          }
+        }
+      }
+    }
+  }
+}
 
 resource "azurerm_role_assignment" "cluster_admin" {
   scope                = azurerm_kubernetes_cluster.this.id
@@ -387,6 +410,78 @@ resource "azurerm_private_dns_zone_virtual_network_link" "webapp_routing" {
   tags                  = azurerm_resource_group.this.tags
 }
 
+#Managed Prometheus and Grafana
+
+resource "azurerm_monitor_workspace" "this" {
+  name                = "prometheus-aks-${var.environment}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+}
+
+resource "azurerm_monitor_data_collection_endpoint" "dataCollectionEndpoint" {
+  name                = "prom-aks-endpoint-${var.environment}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+  kind                = "Linux"
+}
+
+resource "azurerm_monitor_data_collection_rule" "dataCollectionRule" {
+  name                        = "prom-aks-dcr-${var.environment}"
+  location                    = var.location
+  resource_group_name         = azurerm_resource_group.this.name
+  data_collection_endpoint_id = azurerm_monitor_data_collection_endpoint.dataCollectionEndpoint.id
+  kind                        = "Linux"
+  description                 = "DCR for Azure Monitor Metrics Profile (Managed Prometheus)"
+  destinations {
+    monitor_account {
+      monitor_account_id = azurerm_monitor_workspace.this.id
+      name               = "PrometheusAzMonitorAccount"
+    }
+  }
+  data_flow {
+    streams      = ["Microsoft-PrometheusMetrics"]
+    destinations = ["PrometheusAzMonitorAccount"]
+  }
+  data_sources {
+    prometheus_forwarder {
+      streams = ["Microsoft-PrometheusMetrics"]
+      name    = "PrometheusDataSource"
+    }
+  }
+
+}
+
+resource "azurerm_monitor_data_collection_rule_association" "dataCollectionRuleAssociation" {
+  name                    = "prom-aks-dcra-${var.environment}"
+  target_resource_id      = azurerm_kubernetes_cluster.this.id
+  data_collection_rule_id = azurerm_monitor_data_collection_rule.dataCollectionRule.id
+  description             = "Association of data collection rule. Deleting this association will break the data collection for this AKS Cluster."
+}
+
+resource "azurerm_dashboard_grafana" "this" {
+  name                              = "grafana-aks-${var.environment}"
+  location                          = var.location
+  resource_group_name               = azurerm_resource_group.this.name
+  api_key_enabled                   = true
+  deterministic_outbound_ip_enabled = true
+  public_network_access_enabled     = true
+  grafana_major_version             = 10
+
+  azure_monitor_workspace_integrations {
+    resource_id = azurerm_monitor_workspace.this.id
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+resource "azurerm_role_assignment" "grafana_monitoring_reader" {
+  scope                            = azurerm_resource_group.this.id
+  role_definition_name             = "Monitoring Reader"
+  principal_id                     = azurerm_dashboard_grafana.this.identity[0].principal_id
+  skip_service_principal_aad_check = true
+}
 
 # MongoDB VM (Linux)
 resource "azurerm_network_security_group" "mongodb" {

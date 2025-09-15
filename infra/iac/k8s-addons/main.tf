@@ -18,9 +18,9 @@ resource "azurerm_user_assigned_identity" "app" {
 }
 
 # Role assignment granting secret get/list to the identity at Key Vault scope
-resource "azurerm_role_assignment" "kv_secrets_user" {
+resource "azurerm_role_assignment" "app_kv_rbac" {
   scope                = var.key_vault_id
-  role_definition_name = "Key Vault Secrets User"
+  role_definition_name = "Key Vault Administrator"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
@@ -96,9 +96,9 @@ resource "kubernetes_manifest" "ingress_internal" {
   }
 }
 
-output "workload_identity_client_id" {
-  description = "Client ID of the user-assigned workload identity for Key Vault access."
-  value       = azurerm_user_assigned_identity.app.client_id
+output "workload_identity_id" {
+  description = "Resource ID of the user-assigned workload identity for Key Vault access."
+  value       = azurerm_user_assigned_identity.app.id
 }
 
 output "workload_identity_service_account" {

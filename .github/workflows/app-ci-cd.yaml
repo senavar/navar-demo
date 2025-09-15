@@ -85,10 +85,6 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.14.4
       - name: Enforce Image Push Policy
         id: pushpolicy
         run: |
@@ -204,8 +200,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Helm
         uses: azure/setup-helm@v4
-        with:
-          version: v3.14.4
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -247,8 +241,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Helm
         uses: azure/setup-helm@v4
-        with:
-          version: v3.14.4
       - name: Azure Login
         uses: azure/login@v2
         with:

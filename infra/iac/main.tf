@@ -49,7 +49,7 @@ module "core" {
 }
 
 # Kubernetes add-ons module
-# (Workload Identity, ARC, ingress patching)
+# (Workload Identity, Nginx)
 module "k8s_addons" {
   source = "./k8s-addons"
 
@@ -61,7 +61,6 @@ module "k8s_addons" {
   aks_user_assigned_identity_client_id = module.core.aks_user_assigned_identity_client_id
   app_service_account_namespace        = var.app_service_account_namespace
   wi_service_account_name              = var.wi_service_account_name
-  arc_github_config_url                = var.arc_github_config_url
   aks_host                             = module.core.aks_host
   aks_cluster_ca                       = module.core.aks_cluster_ca
   key_vault_id                         = module.core.key_vault_id
@@ -79,7 +78,8 @@ module "appgw" {
   vnet_name           = module.core.virtual_network_name
   appgw_subnet_id     = module.core.subnet_appgw_id
   node_resource_group = module.core.node_resource_group
-  depends_on          = [module.k8s_addons]
+  key_vault_id        = module.core.key_vault_id
+  appgw_uami_id       = module.k8s_addons.workload_identity_id
 }
 
 # Aggregated Outputs
