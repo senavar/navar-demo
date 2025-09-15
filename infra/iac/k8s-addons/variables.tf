@@ -69,3 +69,9 @@ variable "aks_user_assigned_identity_client_id" {
   type        = string
   default     = ""
 }
+
+variable "storage_account_id" {
+  type        = string
+  description = "Resource ID for Storage Account that will host app images and backups"
+  default     = ""
+}

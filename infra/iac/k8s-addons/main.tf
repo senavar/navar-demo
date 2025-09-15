@@ -24,6 +24,13 @@ resource "azurerm_role_assignment" "app_kv_rbac" {
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
+# Allow user-assigned identity to write/read blobs for backups
+resource "azurerm_role_assignment" "aks_storage_blob_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+}
+
 # Kubernetes namespace 
 resource "kubernetes_namespace_v1" "app_namespace" {
   metadata {

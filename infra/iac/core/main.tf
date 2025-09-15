@@ -196,7 +196,7 @@ resource "azurerm_private_endpoint" "kv" {
 }
 
 
-# Storage Account
+# Storage Account for workload
 resource "azurerm_storage_account" "this" {
   name                     = module.naming.storage_account.name_unique
   resource_group_name      = azurerm_resource_group.this.name
@@ -649,3 +649,5 @@ output "aks_host" { value = azurerm_kubernetes_cluster.this.kube_config[0].host 
 output "aks_cluster_ca" { value = azurerm_kubernetes_cluster.this.kube_config[0].cluster_ca_certificate }
 output "key_vault_id" { value = azurerm_key_vault.this.id }
 output "node_resource_group" { value = azurerm_kubernetes_cluster.this.node_resource_group }
+output "storage_account_id" { value = azurerm_storage_account.this.id }
+output "storage_account_name" { value = azurerm_storage_account.this.name }

@@ -19,18 +19,19 @@ terraform {
     }
     azapi = {
       source  = "Azure/azapi"
-      version = ">=3.0"
+      version = ">= 2.0.0"
     }
   }
   backend "azurerm" {}
 }
-
 provider "azurerm" {
   features {}
   subscription_id = "1e40f54e-a0a4-422d-9b45-a51c554c2636"
 }
 
 provider "azuread" {}
+
+provider "azapi" {}
 
 # Core infrastructure module
 module "core" {
@@ -69,9 +70,9 @@ module "k8s_addons" {
   aks_cluster_ca                       = module.core.aks_cluster_ca
   key_vault_id                         = module.core.key_vault_id
   aks_oidc_issuer_url                  = module.core.aks_oidc_issuer_url
+  storage_account_id                   = module.core.storage_account_id
 }
 
-# 
 # Application Gateway module (depends on ingress private IP)
 module "appgw" {
   source = "./appgw"
@@ -91,4 +92,5 @@ output "resource_group_name" { value = module.core.resource_group_name }
 output "aks_name" { value = module.core.aks_name }
 output "key_vault_name" { value = module.core.key_vault_name }
 output "application_gateway_public_ip" { value = try(module.appgw.application_gateway_public_ip, null) }
+output "storage_account_name" { value = module.core.storage_account_name }
 
