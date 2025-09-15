@@ -166,6 +166,7 @@ jobs:
           export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
+          kubectl apply -f infra/iac/k8s-addons/nginx.yaml
           terraform plan -var-file=prod.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
             echo "is_empty=true" >> $GITHUB_OUTPUT
