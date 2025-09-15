@@ -86,25 +86,6 @@ resource "kubernetes_manifest" "app_secret" {
     }
   }
 }
-
-# Patch NGINX service to force internal load balancer (idempotent)
-resource "kubernetes_manifest" "ingress_internal" {
-  manifest = {
-    "apiVersion" = "approuting.kubernetes.azure.com/v1alpha1"
-    "kind"       = "NginxIngressController"
-    "metadata" = {
-      "name" = "nginx-internal"
-    }
-    "spec" = {
-      "ingressClassName"     = "nginx-internal"
-      "controllerNamePrefix" = "nginx-internal"
-      "loadBalancerAnnotations" = {
-        "service.beta.kubernetes.io/azure-load-balancer-internal" = "true"
-      }
-    }
-  }
-}
-
 output "workload_identity_id" {
   description = "Resource ID of the user-assigned workload identity for Key Vault access."
   value       = azurerm_user_assigned_identity.app.id
