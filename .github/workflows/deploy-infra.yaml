@@ -83,16 +83,32 @@ jobs:
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
       - name: Import PFX into Key Vault (creates new version if exists)
+        env:
+          APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
+          APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
         run: |
-          set -e
+          set -euo pipefail
           KV_NAME="kv-navarlab-dev"
-          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
-          if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+          # Decode the PFX without echoing its base64 contents to the log
+          python - <<'PY'
+import os, base64, sys
+data = os.environ.get('APPGW_PFX_BASE64','').strip()
+if not data:
+    print('Base64 PFX secret missing', file=sys.stderr)
+    sys.exit(1)
+try:
+    with open('cert.pfx','wb') as f:
+        f.write(base64.b64decode(data))
+except Exception as e:
+    print(f'Decode failed: {e}', file=sys.stderr)
+    sys.exit(1)
+PY
+          if [ -n "${APPGW_PFX_PASSWORD}" ]; then
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
           else
-            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
           fi
-          rm -f cert.pfx
+          shred -u cert.pfx || rm -f cert.pfx
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -100,6 +116,7 @@ jobs:
           export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
+          kubectl apply -f ./infra/iac/k8s-addons/nginx.yaml
           terraform plan -var-file=dev.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
             echo "is_empty=true" >> $GITHUB_OUTPUT
@@ -149,16 +166,32 @@ jobs:
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
       - name: Import PFX into Key Vault (creates new version if exists)
+        env:
+          APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
+          APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
         run: |
-          set -e
+          set -euo pipefail
           KV_NAME="kv-navarlab-prod"
-          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
-          if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+          # Decode the PFX without printing its base64 to logs
+          python - <<'PY'
+import os, base64, sys
+data = os.environ.get('APPGW_PFX_BASE64','').strip()
+if not data:
+    print('Base64 PFX secret missing', file=sys.stderr)
+    sys.exit(1)
+try:
+    with open('cert.pfx','wb') as f:
+        f.write(base64.b64decode(data))
+except Exception as e:
+    print(f'Decode failed: {e}', file=sys.stderr)
+    sys.exit(1)
+PY
+          if [ -n "${APPGW_PFX_PASSWORD}" ]; then
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
           else
-            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
           fi
-          rm -f cert.pfx
+          shred -u cert.pfx || rm -f cert.pfx
       - name: Plan Full (Prod)
         id: plan-full
         run: |
@@ -166,7 +199,7 @@ jobs:
           export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
-          kubectl apply -f infra/iac/k8s-addons/nginx.yaml
+          kubectl apply -f ./infra/iac/k8s-addons/nginx.yaml
           terraform plan -var-file=prod.tfvars -out=tfplan-full
           if terraform show -json tfplan-full | jq -e 'length(.resource_changes) == 0'; then
             echo "is_empty=true" >> $GITHUB_OUTPUT
