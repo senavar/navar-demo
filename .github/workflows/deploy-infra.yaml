@@ -87,6 +87,8 @@ jobs:
           set -e
           KV_NAME=$(terraform output -raw key_vault_name)
           CERT_NAME="APP_TLS_CERT"
+          echo "Key Vault Name: $KV_NAME"
+          az keyvault show -n "$KV_NAME" -g "rg-dev-navarlab"
           if [ -z "${{ secrets.APPGW_PFX_BASE64 }}" ]; then
             echo "APPGW_PFX_BASE64 secret is empty" >&2; exit 1; fi
           echo "Decoding PFX..."
