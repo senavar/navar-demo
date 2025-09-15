@@ -147,15 +147,17 @@ resource "azurerm_subnet_network_security_group_association" "ops" {
 
 # Key Vault
 resource "azurerm_key_vault" "this" {
-  name                       = "kv-navarlab-${var.environment}"
-  location                   = azurerm_resource_group.this.location
-  resource_group_name        = azurerm_resource_group.this.name
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = lower(var.key_vault_sku) == "premium" ? "premium" : "standard"
-  rbac_authorization_enabled = true
-  purge_protection_enabled   = true
-  soft_delete_retention_days = 7
-  tags                       = azurerm_resource_group.this.tags
+  name                            = "kv-navarlab-${var.environment}"
+  location                        = azurerm_resource_group.this.location
+  resource_group_name             = azurerm_resource_group.this.name
+  tenant_id                       = data.azurerm_client_config.current.tenant_id
+  sku_name                        = lower(var.key_vault_sku) == "premium" ? "premium" : "standard"
+  rbac_authorization_enabled      = true
+  purge_protection_enabled        = true
+  enabled_for_deployment          = true
+  enabled_for_template_deployment = true
+  soft_delete_retention_days      = 7
+  tags                            = azurerm_resource_group.this.tags
 }
 
 resource "azurerm_role_assignment" "akv_admin" {
