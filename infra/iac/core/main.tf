@@ -416,8 +416,13 @@ resource "azurerm_log_analytics_workspace_table" "this" {
   total_retention_in_days = 30
 }
 
+resource "random_string" "name" {
+  length  = 3
+  special = false
+}
+
 resource "azurerm_monitor_diagnostic_setting" "aks" {
-  name                           = "amds-${var.environment}-aks"
+  name                           = "amds-${var.environment}-aks-${random_string.name.result}"
   target_resource_id             = azurerm_kubernetes_cluster.this.id
   log_analytics_destination_type = "Dedicated"
   log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
