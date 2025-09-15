@@ -10,6 +10,8 @@ provider "helm" {
   }
 }
 
+data "azurerm_client_config" "current" {}
+
 # Workload Identity for Application
 resource "azurerm_user_assigned_identity" "app" {
   name                = "uami-${var.environment}-navarapp-wi"
@@ -28,7 +30,7 @@ resource "azurerm_role_assignment" "app_kv_rbac" {
 resource "azurerm_role_assignment" "aks_storage_blob_contributor" {
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.aks.principal_id
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
 # Kubernetes namespace 
