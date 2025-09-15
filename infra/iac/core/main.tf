@@ -147,7 +147,7 @@ resource "azurerm_subnet_network_security_group_association" "ops" {
 
 # Key Vault
 resource "azurerm_key_vault" "this" {
-  name                       = module.naming.key_vault.name_unique
+  name                       = "kv-navarlab-${var.environment}"
   location                   = azurerm_resource_group.this.location
   resource_group_name        = azurerm_resource_group.this.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
@@ -590,7 +590,7 @@ resource "azurerm_role_assignment" "grafana_monitoring_reader" {
 
 # MongoDB VM (Linux)
 resource "azurerm_network_security_group" "mongodb" {
-  name                = module.naming_mongodb.network_security_group.name
+  name                = "nsg-mongodb-${var.environment}"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   tags                = azurerm_resource_group.this.tags

@@ -59,5 +59,5 @@ variable "appgw_uami_id" {
 variable "certificate_secret_name" {
   type        = string
   description = "Name of the Key Vault secret containing the TLS certificate."
-  default     = "APP_TLS_CERT"
+  default     = "APP-TLS-CERT"
 }

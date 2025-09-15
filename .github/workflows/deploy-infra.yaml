@@ -85,12 +85,12 @@ jobs:
       - name: Import PFX into Key Vault (creates new version if exists)
         run: |
           set -e
-          KV_NAME="kv-dev-navarlab-ux8s"
+          KV_NAME="kv-navarlab-dev"
           echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
           if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name $KV_NAME -n APP_TLS_CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
           else
-            az keyvault certificate import --vault-name $KV_NAME -n APP_TLS_CERT -f cert.pfx
+            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx
           fi
           rm -f cert.pfx
       - name: Plan Full (Dev)
@@ -151,18 +151,12 @@ jobs:
       - name: Import PFX into Key Vault (creates new version if exists)
         run: |
           set -e
-          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || true)
-          if [ -z "$KV_NAME" ]; then
-            KV_NAME=$(terraform output -json 2>/dev/null | sed -n 's/.*"key_vault_name"[^"]*"value"[^"]*"\([^"]\+\)".*/\1/p')
-          fi
-          KV_NAME=$(echo "$KV_NAME" | sed -E 's/^\[command\].*terraform-bin output -raw key_vault_name *//; s/\r//g; s/^[[:space:]]+//; s/[[:space:]]+$//')
-          if [ -z "$KV_NAME" ]; then echo "Key Vault name not found" >&2; exit 1; fi
-          echo "KeyVault: $KV_NAME"
+          KV_NAME="kv-navarlab-prod"
           echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
           if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
           else
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx
+            az keyvault certificate import --vault-name $KV_NAME -n APP-TLS-CERT -f cert.pfx
           fi
           rm -f cert.pfx
       - name: Plan Full (Prod)
