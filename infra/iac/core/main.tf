@@ -205,6 +205,16 @@ resource "azurerm_storage_account" "this" {
   account_replication_type = "LRS"
 }
 
+resource "azurerm_storage_container" "media" {
+  name               = "birthdays-images"
+  storage_account_id = azurerm_storage_account.this.id
+}
+
+resource "azurerm_storage_container" "db" {
+  name               = "db-backups"
+  storage_account_id = azurerm_storage_account.this.id
+}
+
 # Azure Container Registry
 resource "azurerm_container_registry" "this" {
   name                = module.naming.container_registry.name_unique

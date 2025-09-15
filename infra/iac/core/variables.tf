@@ -152,3 +152,9 @@ variable "api_server_authorized_ip_ranges" {
 	description = "List of public IPv4 CIDRs allowed to access the AKS API (required; populate with your trusted egress IPs)."
 	type        = list(string)
 }
+
+variable "blob_container_name" {
+	description = "Name of the Azure Storage blob container for application media (images)."
+	type        = string
+	default     = "birthdays-images"
+}

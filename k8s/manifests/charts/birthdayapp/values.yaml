@@ -69,3 +69,10 @@ annotations: {}
 
 # Optional override for version label (falls back to Chart.appVersion)
 appVersionOverride: ""
+
+# Azure Blob Storage configuration for backend media uploads
+azureBlob:
+  enabled: true            # set false to omit env vars entirely
+  accountName: ""         # e.g. mystorageacct (required when enabled)
+  container: ""           # e.g. birthdays-images (required when enabled)
+  urlFormat: ""           # optional e.g. https://cdn.example.com/{container}/{blob}

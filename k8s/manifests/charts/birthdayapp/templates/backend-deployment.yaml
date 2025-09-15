@@ -39,6 +39,16 @@ spec:
               value: /mnt/secrets-store/mongo-conn-string
             - name: MONGO_URI_REFRESH_SECONDS
               value: "60"
+            {{- if .Values.azureBlob.enabled }}
+            - name: AZURE_STORAGE_ACCOUNT_NAME
+              value: "{{ required "azureBlob.accountName is required when azureBlob.enabled=true" .Values.azureBlob.accountName }}"
+            - name: AZURE_BLOB_CONTAINER
+              value: "{{ required "azureBlob.container is required when azureBlob.enabled=true" .Values.azureBlob.container }}"
+            {{- if .Values.azureBlob.urlFormat }}
+            - name: AZURE_BLOB_URL_FORMAT
+              value: "{{ .Values.azureBlob.urlFormat }}"
+            {{- end }}
+            {{- end }}
           volumeMounts:
             - name: instance
               mountPath: /app/instance

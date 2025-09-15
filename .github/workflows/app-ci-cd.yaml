@@ -225,6 +225,9 @@ jobs:
             --set global.namespace="${NAMESPACE}" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
+            --set azureBlob.enabled=true \
+            --set azureBlob.accountName=${{ secrets.AZURE_STORAGE_ACCOUNT_NAME_DEV }} \
+            --set azureBlob.container=${{ secrets.AZURE_BLOB_CONTAINER_NAME_DEV }} \
             --set serviceAccountName=birthdayapp-sa \
             --set appVersionOverride="$APP_VERSION" \
             --history-max=10
@@ -294,6 +297,9 @@ jobs:
             --set global.namespace="$PROD_NS" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
+            --set azureBlob.enabled=true \
+            --set azureBlob.accountName=${{ secrets.AZURE_STORAGE_ACCOUNT_NAME_PROD }} \
+            --set azureBlob.container=${{ secrets.AZURE_BLOB_CONTAINER_NAME_PROD }} \
             --set serviceAccountName=birthdayapp-sa \
             --set appVersionOverride="$APP_VERSION" \
             --history-max=20
