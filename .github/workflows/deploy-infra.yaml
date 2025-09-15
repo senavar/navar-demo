@@ -87,28 +87,15 @@ jobs:
           APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
           APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -e
           KV_NAME="kv-navarlab-dev"
-          # Decode the PFX without echoing its base64 contents to the log
-          python - <<'PY'
-import os, base64, sys
-data = os.environ.get('APPGW_PFX_BASE64','').strip()
-if not data:
-    print('Base64 PFX secret missing', file=sys.stderr)
-    sys.exit(1)
-try:
-    with open('cert.pfx','wb') as f:
-        f.write(base64.b64decode(data))
-except Exception as e:
-    print(f'Decode failed: {e}', file=sys.stderr)
-    sys.exit(1)
-PY
+          printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
           if [ -n "${APPGW_PFX_PASSWORD}" ]; then
             az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
           else
             az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
           fi
-          shred -u cert.pfx || rm -f cert.pfx
+          rm -f cert.pfx
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -170,28 +157,15 @@ PY
           APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
           APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -e
           KV_NAME="kv-navarlab-prod"
-          # Decode the PFX without printing its base64 to logs
-          python - <<'PY'
-import os, base64, sys
-data = os.environ.get('APPGW_PFX_BASE64','').strip()
-if not data:
-    print('Base64 PFX secret missing', file=sys.stderr)
-    sys.exit(1)
-try:
-    with open('cert.pfx','wb') as f:
-        f.write(base64.b64decode(data))
-except Exception as e:
-    print(f'Decode failed: {e}', file=sys.stderr)
-    sys.exit(1)
-PY
+          printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
           if [ -n "${APPGW_PFX_PASSWORD}" ]; then
             az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
           else
             az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
           fi
-          shred -u cert.pfx || rm -f cert.pfx
+          rm -f cert.pfx
       - name: Plan Full (Prod)
         id: plan-full
         run: |
