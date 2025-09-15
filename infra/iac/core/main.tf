@@ -1,3 +1,17 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+    azuread = {
+      source = "hashicorp/azuread"
+    }
+    azapi = {
+      source = "azure/azapi"
+    }
+  }
+}
+
 module "naming" {
   source  = "Azure/naming/azurerm"
   version = "~> 0.4.0"
