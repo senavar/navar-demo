@@ -85,21 +85,18 @@ jobs:
       - name: Import PFX into Key Vault (creates new version if exists)
         run: |
           set -e
-          KV_NAME=$(terraform output -raw key_vault_name)
-          CERT_NAME="APP_TLS_CERT"
-          echo "Key Vault Name: $KV_NAME"
-          az keyvault show -n "$KV_NAME" -g "rg-dev-navarlab"
-          if [ -z "${{ secrets.APPGW_PFX_BASE64 }}" ]; then
-            echo "APPGW_PFX_BASE64 secret is empty" >&2; exit 1; fi
-          echo "Decoding PFX..."
-          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx || { echo "Base64 decode failed" >&2; exit 1; }
-          # Basic sanity: file non‑zero and PKCS#12 signature
-          if [ ! -s cert.pfx ]; then echo "Decoded PFX file is empty" >&2; exit 1; fi
-          file cert.pfx || true
+          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || true)
+          if [ -z "$KV_NAME" ]; then
+            KV_NAME=$(terraform output -json 2>/dev/null | sed -n 's/.*"key_vault_name"[^"]*"value"[^"]*"\([^"]\+\)".*/\1/p')
+          fi
+          KV_NAME=$(echo "$KV_NAME" | sed -E 's/^\[command\].*terraform-bin output -raw key_vault_name *//; s/\r//g; s/^[[:space:]]+//; s/[[:space:]]+$//')
+          if [ -z "$KV_NAME" ]; then echo "Key Vault name not found" >&2; exit 1; fi
+          echo "KeyVault: $KV_NAME"
+          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
           if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
           else
-            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx
           fi
           rm -f cert.pfx
       - name: Plan Full (Dev)
@@ -123,15 +120,8 @@ jobs:
       - name: Kubernetes Cluster Add-Ons
         env:
           GITHUB_PAT: ${{ secrets.GH_RUNNER_PAT }}
-          GITHUB_TARGET: your-org   # or your-org/your-repo
+          GITHUB_TARGET: https://github.com/senavar/navar-demo 
         run: ./k8s/bootstrap/cluster_addons.sh
-      - name: Apply Mongo Backup Script ConfigMap (Dev)
-        run: |
-          kubectl apply -f app/script/mongo-backup-configmap.yaml
-      - name: Apply Mongo Backup CronJob (Dev)
-        run: |
-          kubectl apply -f app/script/mongo-backup-cronjob.yaml
-          kubectl get cronjob mongo-backup -n birthdayapp -o wide
 
   terraform-prod:
     name: 'Terraform Infra for Prod'
@@ -167,18 +157,18 @@ jobs:
       - name: Import PFX into Key Vault (creates new version if exists)
         run: |
           set -e
-          KV_NAME=$(terraform output -raw key_vault_name)
-          CERT_NAME="APP_TLS_CERT"
-          if [ -z "${{ secrets.APPGW_PFX_BASE64 }}" ]; then
-            echo "APPGW_PFX_BASE64 secret is empty" >&2; exit 1; fi
-          echo "Decoding PFX..."
-          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx || { echo "Base64 decode failed" >&2; exit 1; }
-          if [ ! -s cert.pfx ]; then echo "Decoded PFX file is empty" >&2; exit 1; fi
-          file cert.pfx || true
+          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || true)
+          if [ -z "$KV_NAME" ]; then
+            KV_NAME=$(terraform output -json 2>/dev/null | sed -n 's/.*"key_vault_name"[^"]*"value"[^"]*"\([^"]\+\)".*/\1/p')
+          fi
+          KV_NAME=$(echo "$KV_NAME" | sed -E 's/^\[command\].*terraform-bin output -raw key_vault_name *//; s/\r//g; s/^[[:space:]]+//; s/[[:space:]]+$//')
+          if [ -z "$KV_NAME" ]; then echo "Key Vault name not found" >&2; exit 1; fi
+          echo "KeyVault: $KV_NAME"
+          echo "${{ secrets.APPGW_PFX_BASE64 }}" | base64 -d > cert.pfx
           if [ -n "${{ secrets.APPGW_PFX_PASSWORD }}" ]; then
-            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx --password "${{ secrets.APPGW_PFX_PASSWORD }}"
           else
-            az keyvault certificate import --vault-name "$KV_NAME" -n "$CERT_NAME" -f cert.pfx
+            az keyvault certificate import --vault-name "$KV_NAME" -n APP_TLS_CERT -f cert.pfx
           fi
           rm -f cert.pfx
       - name: Plan Full (Prod)
@@ -204,10 +194,3 @@ jobs:
           GITHUB_PAT: ${{ secrets.GH_RUNNER_PAT }}
           GITHUB_TARGET: "https://github.com/senavar/navar-demo"
         run: ./k8s/bootstrap/cluster_addons.sh
-      - name: Apply Mongo Backup Script ConfigMap (Prod)
-        run: |
-          kubectl apply -f app/script/mongo-backup-configmap.yaml
-      - name: Apply Mongo Backup CronJob (Prod)
-        run: |
-          kubectl apply -f app/script/mongo-backup-cronjob.yaml
-          kubectl get cronjob mongo-backup -n birthdayapp -o wide
