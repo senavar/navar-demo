@@ -1,5 +1,5 @@
 name: Setup Azure Tooling
-description: Minimal install of Docker (ensure daemon), Azure CLI, kubectl (via az), and Helm for self-hosted runners
+description: Minimal install of Azure CLI, kubectl (via az), Helm, and crane (registry copy) for self-hosted runners
 runs:
   using: composite
   steps:
@@ -14,75 +14,6 @@ runs:
         # Export for current step (subsequent steps get it from GITHUB_PATH)
         export PATH="$HOME/.local/bin:$PATH"
         echo "User bin ready at: $HOME/.local/bin"
-    - name: Docker (ensure available)
-      shell: bash
-      run: |
-        set -Eeuo pipefail
-        echo "[Docker] Ensuring docker CLI present and daemon running"
-        if ! command -v docker >/dev/null 2>&1; then
-          echo "docker CLI not found. Attempting lightweight install."
-          if [ -f /etc/debian_version ]; then
-            curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
-            sh /tmp/get-docker.sh || { echo "Docker install script failed" >&2; exit 1; }
-          else
-            echo "Auto-install unsupported on this distro. Please pre-provision Docker." >&2
-            # Do not hard fail yet; continue to allow alternative build strategies later.
-            exit 0
-          fi
-        fi
-        # Try to communicate with daemon; if unavailable attempt to start it.
-        if ! docker info >/dev/null 2>&1; then
-          echo "Docker daemon not responding. Attempting start via system service..."
-          sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
-        fi
-        if ! docker info >/dev/null 2>&1; then
-          echo "System service start failed; attempting manual dockerd launch (best-effort)"
-          if command -v dockerd >/dev/null 2>&1; then
-            # Launch in background only if not already running
-            sudo nohup dockerd > /tmp/dockerd.log 2>&1 &
-            for i in $(seq 1 20); do
-              sleep 1
-              docker info >/dev/null 2>&1 && break
-            done
-          fi
-        fi
-        if ! docker info >/dev/null 2>&1; then
-          echo "Docker daemon still not reachable. Attempting rootless Docker setup..."
-          if [ -f /etc/debian_version ]; then
-            echo "Installing rootless prerequisites (uidmap, dbus-user-session, slirp4netns, fuse-overlayfs)"
-            sudo apt-get update -y >/dev/null 2>&1 || true
-            sudo apt-get install -y uidmap dbus-user-session slirp4netns fuse-overlayfs >/dev/null 2>&1 || true
-          fi
-          export DOCKER_ROOTLESS=1
-          curl -fsSL https://get.docker.com/rootless -o /tmp/get-docker-rootless.sh || true
-          if [ -s /tmp/get-docker-rootless.sh ]; then
-            sh /tmp/get-docker-rootless.sh || true
-          fi
-          # Rootless binaries typically placed in ~/bin
-          export PATH="$HOME/bin:$PATH"
-          if command -v dockerd-rootless.sh >/dev/null 2>&1; then
-            echo "Starting rootless dockerd..."
-            nohup dockerd-rootless.sh --experimental > /tmp/dockerd-rootless.log 2>&1 &
-            for i in $(seq 1 25); do
-              sleep 1
-              docker info >/dev/null 2>&1 && break || true
-            done
-          fi
-          # Export DOCKER_HOST if default rootless socket exists
-          ROOTLESS_SOCK="unix:///run/user/$(id -u)/docker.sock"
-          if [ -S "/run/user/$(id -u)/docker.sock" ]; then
-            echo "DOCKER_HOST=$ROOTLESS_SOCK" >> "$GITHUB_ENV"
-            export DOCKER_HOST=$ROOTLESS_SOCK
-          fi
-        fi
-        if docker info >/dev/null 2>&1; then
-          echo "Docker daemon is running (system or rootless)."
-        else
-          echo "WARNING: Docker daemon unavailable after all attempts. docker build steps may fail." >&2
-          # Do NOT exit hard; allow pipeline to decide / possibly use alternative build strategy.
-        fi
-        docker version --format 'Client: {{.Client.Version}}' 2>/dev/null || docker --version || true
-        docker version --format 'Server: {{.Server.Version}}' 2>/dev/null || true
     - name: Azure CLI (if missing)
       shell: bash
       run: |
@@ -145,6 +76,33 @@ runs:
           fi
         fi
         helm version --short || true
+    - name: crane (if missing)
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        if command -v crane >/dev/null 2>&1; then
+          echo "crane already present: $(crane version 2>/dev/null | head -n 1 || true)"
+        else
+          echo "Installing crane (go-containerregistry)"
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64|amd64) ARCH_TAG=x86_64 ;;
+            arm64|aarch64) ARCH_TAG=arm64 ;;
+            *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+          esac
+          CRANE_VERSION=v0.20.2
+          URL="https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_${ARCH_TAG}.tar.gz"
+          TMPDIR=$(mktemp -d)
+          curl -sSL -o "$TMPDIR/crane.tar.gz" "$URL"
+          tar -xzf "$TMPDIR/crane.tar.gz" -C "$TMPDIR" crane
+          mv "$TMPDIR/crane" "$HOME/.local/bin/crane"
+          chmod +x "$HOME/.local/bin/crane"
+          rm -rf "$TMPDIR"
+          if ! command -v crane >/dev/null 2>&1; then
+            echo "crane install failed" >&2; exit 1
+          fi
+        fi
+        crane version || true
     - name: Summary
       shell: bash
       run: |
@@ -152,9 +110,6 @@ runs:
         (command -v az >/dev/null 2>&1 && az version | head -n 1) || echo "az: missing";
         (command -v kubectl >/dev/null 2>&1 && kubectl version --client --short) || echo "kubectl: missing";
         (command -v helm >/dev/null 2>&1 && helm version --short) || echo "helm: missing";
-        (command -v docker >/dev/null 2>&1 && docker --version) || echo "docker: missing";
-        if command -v docker >/dev/null 2>&1; then
-          if docker info >/dev/null 2>&1; then echo "Docker daemon: reachable"; else echo "Docker daemon: NOT reachable"; fi
-        fi
+        (command -v crane >/dev/null 2>&1 && crane version | head -n 1) || echo "crane: missing";
         echo "First PATH entries:"; echo "$PATH" | tr ':' '\n' | head -n 10;
         echo "Setup Azure Tooling complete."

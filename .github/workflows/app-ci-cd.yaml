@@ -88,32 +88,27 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
-      - name: Enforce Image Push Policy
+      - name: Determine Build / Tag Strategy
         id: pushpolicy
         run: |
-          ALLOW=false
-          # Allow push only when:
-          # 1) push event on main branch
-          # 2) push event on semantic version tag vX.Y.Z
-          # 3) manual dispatch from main with push_images != false
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-              ALLOW=true
-            elif [[ "${GITHUB_REF}" =~ refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              ALLOW=true
-            fi
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ "${GITHUB_REF}" == "refs/heads/main" && "${{ github.event.inputs.push_images }}" != "false" ]]; then
-              ALLOW=true
-            fi
+          # Always perform ACR remote builds (they inherently push) for all event types
+          # If workflow_dispatch with push_images=false, still build & push (requirement: dev registry must have images) but mark it as 'non-promotable'.
+          ALLOW=true
+          PROMOTABLE=false
+          if [[ "${GITHUB_REF}" =~ refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            PROMOTABLE=true
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            PROMOTABLE=true
           fi
-          # Enforce manual toggle: if input explicitly false, always false.
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${{ github.event.inputs.push_images }}" == "false" ]]; then
-            ALLOW=false
+            # Force non-promotable, but still allow push to dev
+            PROMOTABLE=false
           fi
           echo "allow_push=$ALLOW" >> $GITHUB_OUTPUT
+          echo "promotable=$PROMOTABLE" >> $GITHUB_OUTPUT
           echo "ALLOW_PUSH=$ALLOW" >> $GITHUB_ENV
-      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+          echo "PROMOTABLE=$PROMOTABLE" >> $GITHUB_ENV
+      - name: Setup Azure Tooling (az, kubectl, helm)
         uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         if: steps.pushpolicy.outputs.allow_push == 'true'
@@ -126,48 +121,75 @@ jobs:
           ACR_NAME=${REGISTRY_DEV%%.*}
           echo "Logging into Dev ACR: $ACR_NAME (${REGISTRY_DEV})"
           az acr login --name "$ACR_NAME"
-      - name: Build Frontend Image & Push
+      - name: Build Frontend (ACR Remote)
         id: build_frontend
         run: |
-          IMG="${REGISTRY_DEV}/birthdayapp/frontend"
+          if [ "$ALLOW_PUSH" != "true" ]; then
+            echo "Skipping remote build (policy disallows push)."
+            echo "digest=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          ACR_NAME=${REGISTRY_DEV%%.*}
           SHORT="${SHORT_SHA}"
           if [ -n "${SEMVER}" ]; then
-            TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
+            PRIMARY_TAG="${SEMVER}"
+            SECONDARY_TAG="sha-${SHORT}"
+            echo "Starting ACR build for frontend with tags: $PRIMARY_TAG and $SECONDARY_TAG"
+            az acr build \
+              --registry "$ACR_NAME" \
+              --image birthdayapp/frontend:${PRIMARY_TAG} \
+              --image birthdayapp/frontend:${SECONDARY_TAG} \
+              "${{ env.FRONTEND_DIR }}"
           else
-            TAGS=($IMG:sha-${SHORT})
+            PRIMARY_TAG="sha-${SHORT}"
+            echo "Starting ACR build for frontend with tag: $PRIMARY_TAG"
+            az acr build \
+              --registry "$ACR_NAME" \
+              --image birthdayapp/frontend:${PRIMARY_TAG} \
+              "${{ env.FRONTEND_DIR }}"
           fi
-          PRIMARY_TAG=${TAGS[0]}
-          docker build -t "$PRIMARY_TAG" "${{ env.FRONTEND_DIR }}"
-          if [ "$ALLOW_PUSH" != "true" ]; then
-            echo "Push skipped (not main/tag or disabled)."
-            echo "digest=" >> $GITHUB_OUTPUT
-          else
-            for t in "${TAGS[@]}"; do [ "$t" = "$PRIMARY_TAG" ] || docker tag "$PRIMARY_TAG" "$t"; done
-            for t in "${TAGS[@]}"; do docker push "$t"; done
-            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$PRIMARY_TAG" | awk -F'@' '{print $2}')
-            echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          # Retrieve digest (same for all tags pointing to this manifest)
+          DIGEST=$(az acr repository show-manifests --name "$ACR_NAME" --repository birthdayapp/frontend \
+            --query "[?contains(tags, '${PRIMARY_TAG}')].digest" -o tsv | head -n 1)
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to obtain digest for frontend image" >&2
+            exit 1
           fi
-      - name: Build Backend Image & Push
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+      - name: Build Backend (ACR Remote)
         id: build_backend
         run: |
-          IMG="${REGISTRY_DEV}/birthdayapp/backend"
+          if [ "$ALLOW_PUSH" != "true" ]; then
+            echo "Skipping remote build (policy disallows push)."
+            echo "digest=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          ACR_NAME=${REGISTRY_DEV%%.*}
           SHORT="${SHORT_SHA}"
           if [ -n "${SEMVER}" ]; then
-            TAGS=($IMG:${SEMVER} $IMG:sha-${SHORT})
+            PRIMARY_TAG="${SEMVER}"
+            SECONDARY_TAG="sha-${SHORT}"
+            echo "Starting ACR build for backend with tags: $PRIMARY_TAG and $SECONDARY_TAG"
+            az acr build \
+              --registry "$ACR_NAME" \
+              --image birthdayapp/backend:${PRIMARY_TAG} \
+              --image birthdayapp/backend:${SECONDARY_TAG} \
+              "${{ env.BACKEND_DIR }}"
           else
-            TAGS=($IMG:sha-${SHORT})
+            PRIMARY_TAG="sha-${SHORT}"
+            echo "Starting ACR build for backend with tag: $PRIMARY_TAG"
+            az acr build \
+              --registry "$ACR_NAME" \
+              --image birthdayapp/backend:${PRIMARY_TAG} \
+              "${{ env.BACKEND_DIR }}"
           fi
-          PRIMARY_TAG=${TAGS[0]}
-          docker build -t "$PRIMARY_TAG" "${{ env.BACKEND_DIR }}"
-          if [ "$ALLOW_PUSH" != "true" ]; then
-            echo "Push skipped (not main/tag or disabled)."
-            echo "digest=" >> $GITHUB_OUTPUT
-          else
-            for t in "${TAGS[@]}"; do [ "$t" = "$PRIMARY_TAG" ] || docker tag "$PRIMARY_TAG" "$t"; done
-            for t in "${TAGS[@]}"; do docker push "$t"; done
-            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$PRIMARY_TAG" | awk -F'@' '{print $2}')
-            echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          DIGEST=$(az acr repository show-manifests --name "$ACR_NAME" --repository birthdayapp/backend \
+            --query "[?contains(tags, '${PRIMARY_TAG}')].digest" -o tsv | head -n 1)
+          if [ -z "$DIGEST" ]; then
+            echo "Failed to obtain digest for backend image" >&2
+            exit 1
           fi
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
       - id: digest_frontend
         run: echo "digest=${{ steps.build_frontend.outputs.digest }}" >> $GITHUB_OUTPUT
       - id: digest_backend
@@ -204,13 +226,13 @@ jobs:
       SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+      - name: Setup Azure Tooling (az, kubectl, helm)
         uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Deploy with Helm (dev)
+      - name: Deploy with Helm to Dev AKS
         run: |
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
@@ -224,7 +246,7 @@ jobs:
           APP_VERSION="${SEMVER:-$SHORT_SHA}"
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
           helm upgrade --install "$RELEASE" "$CHART" \
-            --namespace "${NAMESPACE}" --create-namespace \
+            --namespace "${NAMESPACE}" \
             --set global.registry="${REGISTRY_DEV}" \
             --set global.namespace="${NAMESPACE}" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
@@ -247,42 +269,50 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+      - name: Setup Azure Tooling (az, kubectl, helm)
         uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Promote images to prod ACR
+      - name: Login to ACRs
         run: |
           DEV_ACR_NAME=${REGISTRY_DEV%%.*}
           PROD_ACR_NAME=${REGISTRY_PROD%%.*}
+          az acr login --name "$DEV_ACR_NAME"
+          az acr login --name "$PROD_ACR_NAME"
+      - name: Promote images to prod ACR (client copy)
+        env:
+          SEMVER: ${{ needs.setup.outputs.SEMVER }}
+          SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+        run: |
+          set -euo pipefail
           FRONT=${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACK=${{ needs.build.outputs.BACKEND_DIGEST }}
           if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
             echo "Missing digest(s); cannot promote." >&2
             exit 1
           fi
-          echo "Logging into Dev ACR ($DEV_ACR_NAME) and Prod ACR ($PROD_ACR_NAME)"
-          az acr login -n "$DEV_ACR_NAME"
-          az acr login -n "$PROD_ACR_NAME"
-          echo "Pulling by digest from DEV registry"
-          docker pull ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT}
-          docker pull ${REGISTRY_DEV}/birthdayapp/backend@${BACK}
-          echo "Retagging for PROD registry"
-          docker tag ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT} ${REGISTRY_PROD}/birthdayapp/frontend:prod
-          docker tag ${REGISTRY_DEV}/birthdayapp/backend@${BACK} ${REGISTRY_PROD}/birthdayapp/backend:prod
-          echo "Pushing to PROD registry"
-          docker push ${REGISTRY_PROD}/birthdayapp/frontend:prod
-          docker push ${REGISTRY_PROD}/birthdayapp/backend:prod
-          echo "Promotion push complete"
+            # Build tag list for prod
+          TAGS="prod sha-${SHORT_SHA}"
+          if [ -n "$SEMVER" ]; then
+            TAGS="prod $SEMVER sha-${SHORT_SHA}"
+          fi
+          echo "Promoting digests to prod with tags: $TAGS"
+          for TAG in $TAGS; do
+            echo "Copying frontend@$FRONT to ${REGISTRY_PROD}/birthdayapp/frontend:${TAG}" 
+            crane copy ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT} ${REGISTRY_PROD}/birthdayapp/frontend:${TAG}
+            echo "Copying backend@$BACK to ${REGISTRY_PROD}/birthdayapp/backend:${TAG}" 
+            crane copy ${REGISTRY_DEV}/birthdayapp/backend@${BACK} ${REGISTRY_PROD}/birthdayapp/backend:${TAG}
+          done
+          echo "Promotion copy complete"
       - name: Deploy to prod AKS with Helm
         env:
           FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
         run: |
-          PROD_NS="${NAMESPACE:-birthdayapp}" # PROD_NAMESPACE can be injected later if desired
+          PROD_NS="birthdayapp" 
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
           FRONT="$FRONTEND_DIGEST"
@@ -295,7 +325,7 @@ jobs:
           APP_VERSION="$SEMVER"
           # Use appVersionOverride for runtime version labeling
           helm upgrade --install "$RELEASE" "$CHART" \
-            --namespace "$PROD_NS" --create-namespace \
+            --namespace "${PROD_NS}" \
             --set global.registry="${REGISTRY_PROD}" \
             --set global.namespace="$PROD_NS" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
