@@ -215,8 +215,7 @@ jobs:
           CHART_TGZ=$(ls dist/birthdayapp-*.tgz)
           echo "Packaged chart: $CHART_TGZ"
           # Login to dev ACR for Helm (token based, no docker)
-          DEV_ACR_NAME=${REGISTRY_DEV%%.*}
-          TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
+          TOKEN_JSON=$(az acr login --name "$REGISTRY_DEV" --expose-token -o json)
           DEV_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.accessToken')
           if [ -z "$DEV_TOKEN" ]; then echo "Failed to get ACR token for Helm push" >&2; exit 1; fi
           # Helm OCI push (ensure OCI is enabled)
@@ -268,6 +267,10 @@ jobs:
           APP_VERSION="${SEMVER:-$SHORT_SHA}"
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
           export HELM_EXPERIMENTAL_OCI=1
+          TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
+          DEV_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.accessToken')
+          if [ -z "$DEV_TOKEN" ]; then echo "Failed to get ACR token for Helm pull" >&2; exit 1; fi
+          helm registry login $DEV_REGISTRY_FQDN --username 00000000-0000-0000-0000-000000000000 --password "$DEV_TOKEN"
           helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar
           helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${NAMESPACE}" \
@@ -302,8 +305,8 @@ jobs:
       - name: Login to ACRs
         run: |
           set -euo pipefail
-          DEV_ACR_NAME=${REGISTRY_DEV%%.*}
-          PROD_ACR_NAME=${REGISTRY_PROD%%.*}
+          DEV_ACR_NAME=${REGISTRY_DEV}
+          PROD_ACR_NAME=${REGISTRY_PROD}
           echo "Obtaining access tokens for ACRs without docker daemon (using --expose-token)"
           DEV_TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
           PROD_TOKEN_JSON=$(az acr login --name "$PROD_ACR_NAME" --expose-token -o json)
@@ -372,6 +375,10 @@ jobs:
           APP_VERSION="$SEMVER"
           # Use appVersionOverride for runtime version labeling
           export HELM_EXPERIMENTAL_OCI=1
+          TOKEN_JSON=$(az acr login --name "$REGISTRY_PROD" --expose-token -o json)
+          PROD_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.accessToken')
+            if [ -z "$PROD_TOKEN" ]; then echo "Failed to get ACR token for Helm pull (prod)" >&2; exit 1; fi
+          helm registry login $PROD_REGISTRY_FQDN --username 00000000-0000-0000-0000-000000000000 --password "$PROD_TOKEN"
           helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar || true
           helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${PROD_NS}" \
