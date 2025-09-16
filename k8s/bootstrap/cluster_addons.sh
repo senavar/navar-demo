@@ -16,9 +16,9 @@ ensure_ns() {
   fi
 }
 
-########################
+
 # Kyverno
-########################
+
 KYVERNO_NS="kyverno"
 ensure_ns "$KYVERNO_NS"
 if ! helm ls -n "$KYVERNO_NS" | grep -q "kyverno"; then
@@ -35,9 +35,9 @@ else
   echo "Kyverno already installed"
 fi
 
-########################
+
 # Tetragon
-########################
+
 if ! helm ls -n "kube-system" | grep -q tetragon; then
   echo "Installing Tetragon"
   helm repo add cilium https://helm.cilium.io/ 
@@ -48,9 +48,9 @@ else
   echo "Tetragon already installed"
 fi
 
-########################
+
 # GitHub Actions Runner Controller (ARC) - PAT Auth
-########################
+
 ARC_NS="actions-runner-system"
 RUNNER_NS="actions-runner"  
 ensure_ns "$ARC_NS"
