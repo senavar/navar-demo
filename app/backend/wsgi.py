@@ -1,4 +1,5 @@
 """WSGI entrypoint for Gunicorn.
+"""
 
 from src import create_app
 
