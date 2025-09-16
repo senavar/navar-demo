@@ -29,11 +29,11 @@ if ! helm ls -n "$KYVERNO_NS" | grep -q "kyverno"; then
     --set admissionController.replicas=2 \
     --set backgroundController.replicas=1 \
     --set cleanupController.replicas=1
+    
+  helm install kyverno-policies kyverno/kyverno-policies -n kyverno
 else
   echo "Kyverno already installed"
 fi
-
-helm install kyverno-policies kyverno/kyverno-policies -n kyverno
 
 ########################
 # Tetragon
