@@ -44,20 +44,26 @@ spec:
           imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
           ports:
             - containerPort: 8080
+          # Readiness ensures backend is reachable through internal proxy
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: {{ .Values.probes.frontend.readiness.path }}
               port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 3
+            initialDelaySeconds: {{ .Values.probes.frontend.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.frontend.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.frontend.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.frontend.readiness.failureThreshold }}
+            successThreshold: {{ .Values.probes.frontend.readiness.successThreshold }}
+          # Liveness is a lightweight local health check
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: {{ .Values.probes.frontend.liveness.path }}
               port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            failureThreshold: 3
+            initialDelaySeconds: {{ .Values.probes.frontend.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.frontend.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.frontend.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.frontend.liveness.failureThreshold }}
+            successThreshold: {{ .Values.probes.frontend.liveness.successThreshold }}
           resources:
             {{- toYaml .Values.image.frontend.resources | nindent 12 }}
           securityContext:

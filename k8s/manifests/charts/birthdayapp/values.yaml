@@ -80,3 +80,20 @@ scheduling:
   tolerations: []
   affinity: {}
 
+probes:
+  frontend:
+    readiness:
+      path: /api/healthz
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 20
+      periodSeconds: 30
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+

@@ -30,20 +30,27 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+          # Readiness now verifies backend reachability through the internal nginx proxy.
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /api/healthz
               port: 8080
-            initialDelaySeconds: 5
+            # Slightly larger initial delay to allow backend + DNS resolution
+            initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 2
             failureThreshold: 3
+            successThreshold: 1
+          # Liveness remains a lightweight local check (NGINX only)
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 30
+            timeoutSeconds: 2
             failureThreshold: 3
+            successThreshold: 1
           resources:
             requests:
               cpu: 50m
