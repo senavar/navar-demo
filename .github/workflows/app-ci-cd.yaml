@@ -221,9 +221,10 @@ jobs:
           if [ -z "$DEV_TOKEN" ]; then echo "Failed to get ACR token for Helm push" >&2; exit 1; fi
           # Helm OCI push (ensure OCI is enabled)
           export HELM_EXPERIMENTAL_OCI=1
-          helm registry login ${REGISTRY_DEV} --username 00000000-0000-0000-0000-000000000000 --password "$DEV_TOKEN"
-          helm push "$CHART_TGZ" oci://${REGISTRY_DEV}/helm
-          echo "Helm chart pushed to oci://${REGISTRY_DEV}/helm/birthdayapp:$PKG_VERSION"
+          DEV_REGISTRY_FQDN="${REGISTRY_DEV}.azurecr.io"
+          helm registry login $DEV_REGISTRY_FQDN --username 00000000-0000-0000-0000-000000000000 --password "$DEV_TOKEN"
+          helm push "$CHART_TGZ" oci://$DEV_REGISTRY_FQDN/helm
+          echo "Helm chart pushed to oci://$DEV_REGISTRY_FQDN/helm/birthdayapp:$PKG_VERSION"
           echo "chart_version=$PKG_VERSION" >> $GITHUB_OUTPUT
     outputs:
       FRONTEND_DIGEST: ${{ steps.digest_frontend.outputs.digest }}
@@ -261,7 +262,8 @@ jobs:
             echo "Image digests empty (build-only run). Skipping Helm deploy."; exit 0
           fi
           RELEASE=birthdayapp
-          CHART_REF=oci://${REGISTRY_DEV}/helm/birthdayapp
+          DEV_REGISTRY_FQDN="${REGISTRY_DEV}.azurecr.io"
+          CHART_REF=oci://$DEV_REGISTRY_FQDN/helm/birthdayapp
           CVERSION="$CHART_VERSION"
           APP_VERSION="${SEMVER:-$SHORT_SHA}"
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
@@ -269,7 +271,7 @@ jobs:
           helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar
           helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${NAMESPACE}" \
-            --set global.registry="${REGISTRY_DEV}" \
+            --set global.registry="$DEV_REGISTRY_FQDN" \
             --set global.namespace="${NAMESPACE}" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
@@ -310,8 +312,10 @@ jobs:
           if [ -z "$DEV_PASSWORD" ] || [ -z "$PROD_PASSWORD" ]; then
             echo "Failed to obtain registry tokens" >&2; exit 1; fi
           echo "Logging into registries with crane auth login"
-          crane auth login ${REGISTRY_DEV} -u 00000000-0000-0000-0000-000000000000 -p "$DEV_PASSWORD"
-          crane auth login ${REGISTRY_PROD} -u 00000000-0000-0000-0000-000000000000 -p "$PROD_PASSWORD"
+          DEV_REGISTRY_FQDN="${REGISTRY_DEV}.azurecr.io"
+          PROD_REGISTRY_FQDN="${REGISTRY_PROD}.azurecr.io"
+          crane auth login $DEV_REGISTRY_FQDN -u 00000000-0000-0000-0000-000000000000 -p "$DEV_PASSWORD"
+          crane auth login $PROD_REGISTRY_FQDN -u 00000000-0000-0000-0000-000000000000 -p "$PROD_PASSWORD"
           echo "ACR token-based auth configured for crane operations"
       - name: Promote images to prod ACR (client copy)
         env:
@@ -333,15 +337,15 @@ jobs:
           fi
           echo "Promoting digests to prod with tags: $TAGS"
           for TAG in $TAGS; do
-            echo "Copying frontend@$FRONT to ${REGISTRY_PROD}/birthdayapp/frontend:${TAG}" 
-            crane copy ${REGISTRY_DEV}/birthdayapp/frontend@${FRONT} ${REGISTRY_PROD}/birthdayapp/frontend:${TAG}
-            echo "Copying backend@$BACK to ${REGISTRY_PROD}/birthdayapp/backend:${TAG}" 
-            crane copy ${REGISTRY_DEV}/birthdayapp/backend@${BACK} ${REGISTRY_PROD}/birthdayapp/backend:${TAG}
+            echo "Copying frontend@$FRONT to ${PROD_REGISTRY_FQDN}/birthdayapp/frontend:${TAG}" 
+            crane copy ${DEV_REGISTRY_FQDN}/birthdayapp/frontend@${FRONT} ${PROD_REGISTRY_FQDN}/birthdayapp/frontend:${TAG}
+            echo "Copying backend@$BACK to ${PROD_REGISTRY_FQDN}/birthdayapp/backend:${TAG}" 
+            crane copy ${DEV_REGISTRY_FQDN}/birthdayapp/backend@${BACK} ${PROD_REGISTRY_FQDN}/birthdayapp/backend:${TAG}
           done
           # Promote Helm chart
           if [ -n "$CHART_VERSION" ]; then
             echo "Copying Helm chart birthdayapp:$CHART_VERSION to prod registry"
-            crane copy ${REGISTRY_DEV}/helm/birthdayapp:${CHART_VERSION} ${REGISTRY_PROD}/helm/birthdayapp:${CHART_VERSION}
+            crane copy ${DEV_REGISTRY_FQDN}/helm/birthdayapp:${CHART_VERSION} ${PROD_REGISTRY_FQDN}/helm/birthdayapp:${CHART_VERSION}
           else
             echo "No chart version found; skipping chart promotion" >&2
           fi
@@ -362,7 +366,8 @@ jobs:
             echo "Missing digests; cannot deploy to prod."; exit 1
           fi
           RELEASE=birthdayapp
-          CHART_REF=oci://${REGISTRY_PROD}/helm/birthdayapp
+          PROD_REGISTRY_FQDN="${REGISTRY_PROD}.azurecr.io"
+          CHART_REF=oci://$PROD_REGISTRY_FQDN/helm/birthdayapp
           CVERSION="$CHART_VERSION"
           APP_VERSION="$SEMVER"
           # Use appVersionOverride for runtime version labeling
@@ -370,7 +375,7 @@ jobs:
           helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar || true
           helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${PROD_NS}" \
-            --set global.registry="${REGISTRY_PROD}" \
+            --set global.registry="$PROD_REGISTRY_FQDN" \
             --set global.namespace="$PROD_NS" \
             --set image.frontend.digest="$FRONT" --set image.frontend.tag="placeholder" \
             --set image.backend.digest="$BACK" --set image.backend.tag="placeholder" \
