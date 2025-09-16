@@ -386,15 +386,16 @@ resource "azurerm_kubernetes_cluster" "this" {
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "user" {
-  name                  = "user"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = var.aks_user_vm_size
-  node_count            = var.aks_user_node_count
-  os_sku                = "AzureLinux"
-  vnet_subnet_id        = azurerm_subnet.aks_user.id
-  orchestrator_version  = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
-  mode                  = "User"
-  tags                  = azurerm_resource_group.this.tags
+  name                        = "user"
+  kubernetes_cluster_id       = azurerm_kubernetes_cluster.this.id
+  vm_size                     = var.aks_user_vm_size
+  node_count                  = var.aks_user_node_count
+  os_sku                      = "AzureLinux"
+  vnet_subnet_id              = azurerm_subnet.aks_user.id
+  orchestrator_version        = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
+  mode                        = "User"
+  tags                        = azurerm_resource_group.this.tags
+  temporary_name_for_rotation = "user-rotation"
 }
 
 resource "azurerm_log_analytics_workspace" "this" {
