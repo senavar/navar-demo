@@ -1,5 +1,5 @@
 name: Setup Azure Tooling
-description: Minimal install of Azure CLI, kubectl (via az), and Helm for self-hosted runners
+description: Minimal install of Docker (ensure daemon), Azure CLI, kubectl (via az), and Helm for self-hosted runners
 runs:
   using: composite
   steps:
@@ -14,6 +14,45 @@ runs:
         # Export for current step (subsequent steps get it from GITHUB_PATH)
         export PATH="$HOME/.local/bin:$PATH"
         echo "User bin ready at: $HOME/.local/bin"
+    - name: Docker (ensure available)
+      shell: bash
+      run: |
+        set -Eeuo pipefail
+        echo "[Docker] Ensuring docker CLI present and daemon running"
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "docker CLI not found. Attempting lightweight install."
+          if [ -f /etc/debian_version ]; then
+            curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+            sh /tmp/get-docker.sh || { echo "Docker install script failed" >&2; exit 1; }
+          else
+            echo "Auto-install unsupported on this distro. Please pre-provision Docker." >&2
+            exit 1
+          fi
+        fi
+        # Try to communicate with daemon; if unavailable attempt to start it.
+        if ! docker info >/dev/null 2>&1; then
+          echo "Docker daemon not responding. Attempting start via system service..."
+          sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+        fi
+        if ! docker info >/dev/null 2>&1; then
+          echo "System service start failed; attempting manual dockerd launch (best-effort)"
+          if command -v dockerd >/dev/null 2>&1; then
+            # Launch in background only if not already running
+            sudo nohup dockerd > /tmp/dockerd.log 2>&1 &
+            for i in $(seq 1 20); do
+              sleep 1
+              docker info >/dev/null 2>&1 && break
+            done
+          fi
+        fi
+        if docker info >/dev/null 2>&1; then
+          echo "Docker daemon is running."
+        else
+          echo "Docker daemon not reachable after attempts." >&2
+          exit 1
+        fi
+        docker version --format 'Client: {{.Client.Version}}' 2>/dev/null || docker --version || true
+        docker version --format 'Server: {{.Server.Version}}' 2>/dev/null || true
     - name: Azure CLI (if missing)
       shell: bash
       run: |
@@ -83,5 +122,9 @@ runs:
         (command -v az >/dev/null 2>&1 && az version | head -n 1) || echo "az: missing";
         (command -v kubectl >/dev/null 2>&1 && kubectl version --client --short) || echo "kubectl: missing";
         (command -v helm >/dev/null 2>&1 && helm version --short) || echo "helm: missing";
+        (command -v docker >/dev/null 2>&1 && docker --version) || echo "docker: missing";
+        if command -v docker >/dev/null 2>&1; then
+          if docker info >/dev/null 2>&1; then echo "Docker daemon: reachable"; else echo "Docker daemon: NOT reachable"; fi
+        fi
         echo "First PATH entries:"; echo "$PATH" | tr ':' '\n' | head -n 10;
         echo "Setup Azure Tooling complete."
