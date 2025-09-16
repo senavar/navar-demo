@@ -1,4 +1,3 @@
-# Global image registry (overridden via --set or env)
 global:
   registry: ""
   namespace: "birthdayapp"
@@ -6,8 +5,8 @@ global:
 image:
   frontend:
     repository: birthdayapp/frontend
-    tag: "dev"          # default fallback
-    digest: ""          # if set will take precedence over tag
+    tag: "dev"          
+    digest: ""          
     pullPolicy: IfNotPresent
     replicas: 2
     resources:
@@ -64,15 +63,21 @@ podSecurityContext:
 containerSecurityContext:
   allowPrivilegeEscalation: false
 
-# Extra annotations for deployments
 annotations: {}
 
-# Optional override for version label (falls back to Chart.appVersion)
 appVersionOverride: ""
 
-# Azure Blob Storage configuration for backend media uploads
 azureBlob:
   enabled: true            # set false to omit env vars entirely
   accountName: ""         # e.g. mystorageacct (required when enabled)
   container: ""           # e.g. birthdays-images (required when enabled)
   urlFormat: ""           # optional e.g. https://cdn.example.com/{container}/{blob}
+
+# Node scheduling configuration
+# By default we pin workloads to AKS user node pools.
+scheduling:
+  nodeSelector:
+    agentpool: "user"      
+  tolerations: []
+  affinity: {}
+
