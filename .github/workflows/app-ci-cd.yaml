@@ -267,7 +267,7 @@ jobs:
           APP_VERSION="${SEMVER:-$SHORT_SHA}"
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
           export HELM_EXPERIMENTAL_OCI=1
-          TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
+          TOKEN_JSON=$(az acr login --name "$REGISTRY_DEV" --expose-token -o json)
           DEV_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.accessToken')
           if [ -z "$DEV_TOKEN" ]; then echo "Failed to get ACR token for Helm pull" >&2; exit 1; fi
           helm registry login $DEV_REGISTRY_FQDN --username 00000000-0000-0000-0000-000000000000 --password "$DEV_TOKEN"
@@ -308,8 +308,8 @@ jobs:
           DEV_ACR_NAME=${REGISTRY_DEV}
           PROD_ACR_NAME=${REGISTRY_PROD}
           echo "Obtaining access tokens for ACRs without docker daemon (using --expose-token)"
-          DEV_TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
-          PROD_TOKEN_JSON=$(az acr login --name "$PROD_ACR_NAME" --expose-token -o json)
+          DEV_TOKEN_JSON=$(az acr login --name "$REGISTRY_DEV" --expose-token -o json)
+          PROD_TOKEN_JSON=$(az acr login --name "$REGISTRY_PROD" --expose-token -o json)
           DEV_PASSWORD=$(echo "$DEV_TOKEN_JSON" | jq -r '.accessToken')
           PROD_PASSWORD=$(echo "$PROD_TOKEN_JSON" | jq -r '.accessToken')
           if [ -z "$DEV_PASSWORD" ] || [ -z "$PROD_PASSWORD" ]; then
