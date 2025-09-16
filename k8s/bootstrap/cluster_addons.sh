@@ -55,7 +55,7 @@ ARC_NS="actions-runner-system"
 RUNNER_NS="actions-runner"  
 ensure_ns "$ARC_NS"
 ensure_ns "$RUNNER_NS"
-if ! helm ls -n "$ARC_NS" | grep -q actions-runner-controller; then
+if ! helm ls -n "$ARC_NS" | grep -q arc; then
     echo "Installing ARC (PAT auth)"
     helm install arc --namespace "${ARC_NS}" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
     helm install arc-runner-set \
