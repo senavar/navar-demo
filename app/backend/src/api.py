@@ -94,11 +94,43 @@ def create_birthday():
             return jsonify({"message": "Invalid file type"}), 400
 
     try:
+        name = request.form.get('name', '').strip()
+        year_raw = request.form.get('year')
+        month_raw = request.form.get('month')
+        day_raw = request.form.get('day')
+
+        # Basic presence / type checks
+        year = int(year_raw) if year_raw not in (None, '') else None
+        month = int(month_raw) if month_raw not in (None, '') else None
+        day = int(day_raw) if day_raw not in (None, '') else None
+
+        errors = []
+        if not name:
+            errors.append("Name is required")
+        if year is None or year < 1900 or year > 2100:
+            errors.append("Year must be a 4-digit number between 1900 and 2100")
+        if month is None or month < 1 or month > 12:
+            errors.append("Month must be between 1 and 12")
+        if day is None or day < 1 or day > 31:
+            errors.append("Day must be between 1 and 31")
+
+        # Date consistency check (handles leap years, invalid combos like Apr 31)
+        if not errors and (year is not None and month is not None and day is not None):
+            from datetime import date
+            try:
+                date(year, month, day)
+            except ValueError as ve:  # invalid calendar date
+                errors.append(f"Invalid calendar date: {ve}")
+
+        if errors:
+            # Provide a clear structured error instead of a vague pattern message
+            return jsonify({"message": "Validation failed", "errors": errors}), 400
+
         new_person = {
-            "name": request.form['name'],
-            "year": int(request.form['year']),
-            "month": int(request.form['month']),
-            "day": int(request.form['day']),
+            "name": name,
+            "year": year,
+            "month": month,
+            "day": day,
             "profile_picture": unique_filename
         }
     except (KeyError, ValueError) as e:

@@ -283,6 +283,7 @@ jobs:
             --set azureBlob.container=${{ secrets.AZURE_BLOB_CONTAINER_NAME_DEV }} \
             --set serviceAccountName=birthdayapp-sa \
             --set appVersionOverride="$APP_VERSION" \
+            --set ingress.host="dev.birthday.losnavar.com" \
             --history-max=10
           kubectl rollout status deployment/frontend -n "${NAMESPACE}" --timeout=180s || true
           kubectl rollout status deployment/backend -n "${NAMESPACE}" --timeout=180s || true
