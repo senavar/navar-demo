@@ -1,108 +1,87 @@
-name: "Setup Azure Tooling"
-description: "Installs Azure CLI, kubectl, kubelogin, and Helm on self-hosted ARC runners"
-inputs:
-  helm-version:
-    description: "Specific Helm version (e.g. v3.15.0). If empty, latest script-managed version is installed."
-    required: false
-    default: ""
+name: Setup Azure Tooling
+description: Minimal install of Azure CLI, kubectl (via az), and Helm for self-hosted runners
 runs:
-  using: "composite"
+  using: composite
   steps:
-    - name: Prepare user bin directory
+    - name: Prepare bin & PATH
       shell: bash
       run: |
-        set -euo pipefail
+        set -Eeuo pipefail
         mkdir -p "$HOME/.local/bin"
-        echo "Prepared user bin directory at $HOME/.local/bin"
-    - name: Install Azure CLI (if missing)
-      id: install-az
+        if ! echo "$PATH" | tr ':' '\n' | grep -Fxq "$HOME/.local/bin"; then
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        fi
+        # Export for current step (subsequent steps get it from GITHUB_PATH)
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "User bin ready at: $HOME/.local/bin"
+    - name: Azure CLI (if missing)
       shell: bash
       run: |
-        set -euo pipefail
+        set -Eeuo pipefail
         if command -v az >/dev/null 2>&1; then
-          echo "Azure CLI already present: $(az version 2>/dev/null | grep 'azure-cli' || true)"
+          echo "Azure CLI already installed: $(az version 2>/dev/null | grep 'azure-cli' || true)"
         else
           echo "Installing Azure CLI..."
-          # Detect distro (assuming Debian/Ubuntu for ARC runner base). Adjust if needed.
           if [ -f /etc/debian_version ]; then
-            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+            (curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash) || { echo "Azure CLI install failed" >&2; exit 1; }
           else
-            curl -sL https://aka.ms/InstallAzureCli | bash
+            # Generic script (attempt sudo first, then without)
+            (curl -sL https://aka.ms/InstallAzureCli | sudo bash) || (curl -sL https://aka.ms/InstallAzureCli | bash) || { echo "Azure CLI install failed" >&2; exit 1; }
           fi
         fi
         az version | head -n 1 || true
-
-    - name: Install kubectl (if missing)
+    - name: kubectl (via az aks install-cli)
       shell: bash
       run: |
-        set -euo pipefail
+        set -Eeuo pipefail
         if command -v kubectl >/dev/null 2>&1; then
-          echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || true)"
+          echo "kubectl already present: $(kubectl version --client --short 2>/dev/null || true)"
         else
-          echo "Installing kubectl via sudo az aks install-cli (uses Microsoft-managed default version)"
-          sudo az aks install-cli
-          # Ensure kubectl ends up in a PATH dir; copy to user bin if necessary
+          echo "Installing kubectl using az aks install-cli"
+            # Try without sudo first (user-level), then with sudo.
+          az aks install-cli || sudo az aks install-cli || true
           if ! command -v kubectl >/dev/null 2>&1; then
+            # Fallback: copy from common install locations if script placed it somewhere not in PATH
             if [ -f /usr/local/bin/kubectl ]; then
               cp /usr/local/bin/kubectl "$HOME/.local/bin/kubectl" || true
+              chmod +x "$HOME/.local/bin/kubectl" || true
             elif [ -f ./kubectl ]; then
               mv ./kubectl "$HOME/.local/bin/kubectl" || true
+              chmod +x "$HOME/.local/bin/kubectl" || true
             fi
           fi
-          echo "kubectl after install: $(kubectl version --client --short 2>/dev/null || true)"
+          if ! command -v kubectl >/dev/null 2>&1; then
+            echo "kubectl install failed" >&2
+            exit 1
+          fi
         fi
-
-    - name: Install Helm (if missing or version requested)
+        kubectl version --client --short || true
+    - name: Helm (if missing)
       shell: bash
       run: |
-        set -euo pipefail
-        WANT="${{ inputs.helm-version }}"
+        set -Eeuo pipefail
         if command -v helm >/dev/null 2>&1; then
-          CURR=$(helm version --short 2>/dev/null || true)
-          echo "Existing Helm: $CURR"
-          if [ -n "$WANT" ] && ! echo "$CURR" | grep -q "$WANT"; then
-            echo "Re-installing Helm to match $WANT"
-          else
-            if [ -z "$WANT" ]; then
-              echo "Keeping existing Helm installation."; exit 0
-            fi
-          fi
-        fi
-        echo "Installing Helm (requested version: ${WANT:-latest})"
-        export HELM_INSTALL_DIR="$HOME/.local/bin"
-        export USE_SUDO=false
-        mkdir -p "$HELM_INSTALL_DIR"
-        if [ -n "$WANT" ]; then
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- --version "$WANT"
+          echo "Helm already present: $(helm version --short 2>/dev/null || true)"
         else
+          echo "Installing Helm (latest)"
+          export HELM_INSTALL_DIR="$HOME/.local/bin"
+          export USE_SUDO=false
+          mkdir -p "$HELM_INSTALL_DIR"
+          export PATH="$HOME/.local/bin:$PATH"
           curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          if ! command -v helm >/dev/null 2>&1; then
+            echo "Helm not found after install attempt" >&2
+            ls -l "$HOME/.local/bin" || true
+            exit 1
+          fi
         fi
         helm version --short || true
-
-    - name: Add tool directories to PATH
-      shell: bash
-      run: |
-        set -euo pipefail
-        # Collect potential install locations and append if not already present.
-        ADDED=0
-        for d in "$HOME/.local/bin" /usr/local/bin /usr/bin "$HOME/bin"; do
-          if [ -d "$d" ]; then
-            # Avoid duplicate lines in $GITHUB_PATH (GitHub does not deduplicate automatically across runs)
-            if ! echo "$PATH" | tr ':' '\n' | grep -Fxq "$d"; then
-              echo "$d" >> "$GITHUB_PATH"
-              ADDED=$((ADDED+1))
-            fi
-          fi
-        done
-        echo "Appended $ADDED directory(ies) to PATH context.";
-        echo "Resulting PATH preview:";
-        echo "$PATH" | tr ':' '\n' | head -n 25
-
     - name: Summary
       shell: bash
       run: |
         echo "Tool versions:";
-        command -v az && az version | head -n 1 || echo "az missing";
-        command -v kubectl && kubectl version --client --short || echo "kubectl missing";
-        command -v helm && helm version --short || echo "helm missing";
-        echo "Simplified install (kubectl via az aks install-cli) complete.";
+        (command -v az >/dev/null 2>&1 && az version | head -n 1) || echo "az: missing";
+        (command -v kubectl >/dev/null 2>&1 && kubectl version --client --short) || echo "kubectl: missing";
+        (command -v helm >/dev/null 2>&1 && helm version --short) || echo "helm: missing";
+        echo "First PATH entries:"; echo "$PATH" | tr ':' '\n' | head -n 10;
+        echo "Setup Azure Tooling complete."
