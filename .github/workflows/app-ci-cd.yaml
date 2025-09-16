@@ -79,7 +79,7 @@ jobs:
       SHORT_SHA: ${{ steps.metadata.outputs.shortsha }}
 
   build:
-    name: Build and Push Images + Helm Chart
+    name: Build and Push Images + Helm Chart to Dev ACR
     runs-on: arc-runner-set-dev
     needs: setup
     env:

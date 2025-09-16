@@ -40,7 +40,7 @@ spec:
       {{- end }}
       containers:
         - name: frontend
-          image: {{ include "birthdayapp.image" .Values.image.frontend }}
+          image: {{ include "birthdayapp.image" (list . .Values.image.frontend) }}
           imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
           ports:
             - containerPort: 8080
