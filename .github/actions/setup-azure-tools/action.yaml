@@ -39,8 +39,8 @@ runs:
         if command -v kubectl >/dev/null 2>&1; then
           echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || true)"
         else
-          echo "Installing kubectl via az aks install-cli (uses Microsoft-managed default version)"
-          az aks install-cli
+          echo "Installing kubectl via sudo az aks install-cli (uses Microsoft-managed default version)"
+          sudo az aks install-cli
           # Ensure kubectl ends up in a PATH dir; copy to user bin if necessary
           if ! command -v kubectl >/dev/null 2>&1; then
             if [ -f /usr/local/bin/kubectl ]; then
