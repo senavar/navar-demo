@@ -45,7 +45,7 @@ serviceAccountName: birthdayapp-sa
 ingress:
   enabled: true
   className: nginx-internal
-  host: birthday.losnavar.com
+  host: "*.losnavar.com"
 
 networkPolicy:
   backend:

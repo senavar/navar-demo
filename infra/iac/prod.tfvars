@@ -3,7 +3,7 @@ location    = "centralus"
 acr_sku     = "Premium"
 aks_system_node_count = 1
 aks_user_node_count   = 1
-mongodb_vm_size       = "Standard_D8s_v3"
+mongodb_vm_size       = "Standard_D4s_v3"
 admin_source_ips      = ["99.113.26.153/32"]
 api_server_authorized_ip_ranges = ["99.113.26.153/32"]
 vnet_address_space = ["10.20.0.0/20"]
@@ -15,7 +15,7 @@ subnet_cidrs = {
   ops        = "10.20.4.0/24"
 }
 aks_system_vm_size = "Standard_D2s_v6"
-aks_user_vm_size   = "Standard_D2s_v6"
+aks_user_vm_size   = "Standard_D4s_v6"
 mongodb_admin_password = "!Azure!@#$"
 linux_image = {
   publisher: "cognosys"

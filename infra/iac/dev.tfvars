@@ -15,7 +15,7 @@ subnet_cidrs = {
   ops        = "10.10.4.0/24"
 }
 aks_system_vm_size = "Standard_D2s_v6"
-aks_user_vm_size   = "Standard_D2s_v6"
+aks_user_vm_size   = "Standard_D4s_v6"
 mongodb_admin_password = "!Azure!@#$"
 linux_image = {
   publisher: "cognosys"
