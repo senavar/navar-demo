@@ -395,7 +395,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
   orchestrator_version        = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
   mode                        = "User"
   tags                        = azurerm_resource_group.this.tags
-  temporary_name_for_rotation = "user-rotation"
+  temporary_name_for_rotation = "userrotate"
 }
 
 resource "azurerm_log_analytics_workspace" "this" {
