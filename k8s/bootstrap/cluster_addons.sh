@@ -58,7 +58,7 @@ ensure_ns "$RUNNER_NS"
 if ! helm ls -n "$ARC_NS" | grep -q arc; then
     echo "Installing ARC (PAT auth)"
     helm install arc --namespace "${ARC_NS}" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
-    helm install arc-runner-set \
+    helm install arc-runner-set-${ENVIRONMENT} \
         --namespace "${RUNNER_NS}" \
         --set githubConfigUrl="${GITHUB_TARGET}" \
         --set githubConfigSecret.github_token="${GITHUB_PAT}" \

@@ -191,6 +191,7 @@ jobs:
         env:
           GITHUB_PAT: ${{ secrets.PAT_GITHUB }}
           GITHUB_TARGET: "https://github.com/senavar/navar-demo"
+          ENVIRONMENT: "prod"
         run: |
           chmod +x ./../../k8s/bootstrap/cluster_addons.sh
           ./../../k8s/bootstrap/cluster_addons.sh

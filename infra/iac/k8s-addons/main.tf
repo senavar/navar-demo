@@ -12,25 +12,10 @@ provider "helm" {
 
 data "azurerm_client_config" "current" {}
 
-# Workload Identity for Application
-resource "azurerm_user_assigned_identity" "app" {
+data "azurerm_user_assigned_identity" "app" {
   name                = "uami-${var.environment}-navarapp-wi"
   location            = var.location
   resource_group_name = var.core_resource_group_name
-}
-
-# Role assignment granting secret get/list to the identity at Key Vault scope
-resource "azurerm_role_assignment" "app_kv_rbac" {
-  scope                = var.key_vault_id
-  role_definition_name = "Key Vault Administrator"
-  principal_id         = azurerm_user_assigned_identity.app.principal_id
-}
-
-# Allow user-assigned identity to write/read blobs for backups
-resource "azurerm_role_assignment" "aks_storage_blob_contributor" {
-  scope                = var.storage_account_id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
 # Kubernetes namespace 
@@ -46,7 +31,7 @@ resource "kubernetes_service_account_v1" "app_sa" {
     name      = var.wi_service_account_name
     namespace = kubernetes_namespace_v1.app_namespace.metadata[0].name
     annotations = {
-      "azure.workload.identity/client-id" = azurerm_user_assigned_identity.app.client_id
+      "azure.workload.identity/client-id" = data.azurerm_user_assigned_identity.app.client_id
     }
   }
 }
@@ -55,7 +40,7 @@ resource "kubernetes_service_account_v1" "app_sa" {
 resource "azurerm_federated_identity_credential" "app" {
   name                = "fed-${var.environment}-navarapp-uami"
   resource_group_name = var.core_resource_group_name
-  parent_id           = azurerm_user_assigned_identity.app.id
+  parent_id           = data.azurerm_user_assigned_identity.app.id
   audience            = ["api://AzureADTokenExchange"]
   issuer              = var.aks_oidc_issuer_url
   subject             = "system:serviceaccount:${kubernetes_service_account_v1.app_sa.metadata[0].namespace}:${kubernetes_service_account_v1.app_sa.metadata[0].name}"

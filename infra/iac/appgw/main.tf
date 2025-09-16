@@ -9,6 +9,10 @@ data "azurerm_lb" "internal_lb" {
   resource_group_name = var.node_resource_group
 }
 
+data "azurerm_key_vault_secret" "appgw_tls" {
+  name         = var.certificate_secret_name
+  key_vault_id = var.key_vault_id
+}
 resource "azurerm_public_ip" "appgw" {
   name                = module.naming.public_ip.name
   resource_group_name = var.resource_group_name
@@ -25,7 +29,6 @@ resource "azurerm_application_gateway" "this" {
   location            = var.location
   tags                = var.tags
 
-  # Attach user-assigned identity so App Gateway can retrieve certificate from Key Vault
   identity {
     type         = "UserAssigned"
     identity_ids = [var.appgw_uami_id]
@@ -151,11 +154,6 @@ resource "azurerm_application_gateway" "this" {
     policy_type = "Predefined"
     policy_name = "AppGwSslPolicy20220101"
   }
-}
-
-data "azurerm_key_vault_secret" "appgw_tls" {
-  name         = var.certificate_secret_name
-  key_vault_id = var.key_vault_id
 }
 
 output "application_gateway_id" {

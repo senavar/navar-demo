@@ -728,6 +728,27 @@ resource "azurerm_role_assignment" "mongodb_owner" {
   principal_id         = azurerm_user_assigned_identity.mongodb.principal_id
 }
 
+#UAMI for Application
+resource "azurerm_user_assigned_identity" "app" {
+  name                = "uami-${var.environment}-navarapp-wi"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.this.name
+}
+
+## Role assignment granting secret get/list to the identity at Key Vault scope
+resource "azurerm_role_assignment" "app_kv_rbac" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+## Allow user-assigned identity to write/read blobs for backups
+resource "azurerm_role_assignment" "aks_storage_blob_contributor" {
+  scope                = azurerm_key_vault.this.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
 # Outputs 
 output "resource_group_name" { value = azurerm_resource_group.this.name }
 output "aks_name" { value = azurerm_kubernetes_cluster.this.name }
