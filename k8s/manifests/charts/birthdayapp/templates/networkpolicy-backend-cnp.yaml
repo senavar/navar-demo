@@ -34,4 +34,21 @@ spec:
         - ports:
             - port: "27017"
               protocol: TCP
+    # Allow egress to Azure AD login endpoint for Workload Identity token exchange
+    - toFQDNs:
+        - matchName: login.microsoftonline.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+      {{- if .Values.networkPolicy.backend.azureExtraFQDNs }}
+    - toFQDNs:
+        {{- range .Values.networkPolicy.backend.azureExtraFQDNs }}
+        - matchName: {{ . | quote }}
+        {{- end }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+      {{- end }}
 {{- end }}

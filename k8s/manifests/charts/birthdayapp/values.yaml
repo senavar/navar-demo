@@ -51,6 +51,8 @@ networkPolicy:
   backend:
     enabled: true
     mongoCIDR: 10.10.3.4/32
+    # Additional Azure FQDNs (besides login.microsoftonline.com automatically allowed) that backend needs (e.g. management.azure.com, storage account endpoints)
+    azureExtraFQDNs: []
 
 podSecurityContext:
   runAsNonRoot: true
@@ -116,4 +118,8 @@ probes:
       timeoutSeconds: 2
       failureThreshold: 3
       successThreshold: 1
+
+workloadIdentity:
+  backend:
+    enabled: true  # set to true to add label azure.workload.identity/use: "true" on backend pods
 

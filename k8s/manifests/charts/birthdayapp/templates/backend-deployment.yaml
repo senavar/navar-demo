@@ -18,6 +18,9 @@ spec:
         app: backend
         app.kubernetes.io/name: backend
         app.kubernetes.io/version: {{ include "birthdayapp.version" . }}
+        {{- if .Values.workloadIdentity.backend.enabled }}
+        azure.workload.identity/use: "true"
+        {{- end }}
     spec:
       serviceAccountName: {{ .Values.serviceAccountName }}
       securityContext:
