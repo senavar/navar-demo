@@ -56,6 +56,7 @@ jobs:
   terraform-dev:
     name: 'Terraform Infra for Dev'
     runs-on: ubuntu-latest
+    needs: scan
     environment: development
     defaults:
       run:

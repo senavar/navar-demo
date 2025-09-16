@@ -96,4 +96,24 @@ probes:
       timeoutSeconds: 2
       failureThreshold: 3
       successThreshold: 1
+  backend:
+    startup:
+      path: /api/healthz
+      periodSeconds: 3
+      failureThreshold: 20
+      timeoutSeconds: 2
+    readiness:
+      path: /api/healthz
+      initialDelaySeconds: 8
+      periodSeconds: 10
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
+    liveness:
+      path: /api/healthz
+      initialDelaySeconds: 40
+      periodSeconds: 30
+      timeoutSeconds: 2
+      failureThreshold: 3
+      successThreshold: 1
 

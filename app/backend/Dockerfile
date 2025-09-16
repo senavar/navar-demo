@@ -23,4 +23,4 @@ USER appuser
 EXPOSE ${APP_PORT}
 
 # Use shell form so environment variable expansion works for APP_PORT
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${APP_PORT} --workers=${GUNICORN_WORKERS} --threads=${GUNICORN_THREADS} --preload wsgi:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${APP_PORT} --workers=${GUNICORN_WORKERS} --threads=${GUNICORN_THREADS} wsgi:app"]

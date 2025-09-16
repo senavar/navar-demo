@@ -48,18 +48,24 @@ spec:
             - name: mongo-conn
               mountPath: /mnt/secrets-store
               readOnly: true
+          startupProbe:
+            httpGet:
+              path: /api/healthz
+              port: 8000
+            periodSeconds: 3
+            failureThreshold: 20  # up to ~60s for initial bring-up
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 8000
-            initialDelaySeconds: 5
+            initialDelaySeconds: 8
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /api/healthz
               port: 8000
-            initialDelaySeconds: 15
+            initialDelaySeconds: 40
             periodSeconds: 30
             failureThreshold: 3
           resources:

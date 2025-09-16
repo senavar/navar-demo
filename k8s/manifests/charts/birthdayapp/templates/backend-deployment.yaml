@@ -71,20 +71,37 @@ spec:
             - name: mongo-conn
               mountPath: /mnt/secrets-store
               readOnly: true
+          {{- with .Values.probes.backend.startup }}
+          startupProbe:
+            httpGet:
+              path: {{ .path | default "/api/healthz" }}
+              port: 8000
+            periodSeconds: {{ .periodSeconds | default 3 }}
+            failureThreshold: {{ .failureThreshold | default 20 }}
+            timeoutSeconds: {{ .timeoutSeconds | default 2 }}
+          {{- end }}
+          {{- with .Values.probes.backend.readiness }}
           readinessProbe:
             httpGet:
-              path: /api/healthz
+              path: {{ .path | default "/api/healthz" }}
               port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 3
+            initialDelaySeconds: {{ .initialDelaySeconds | default 8 }}
+            periodSeconds: {{ .periodSeconds | default 10 }}
+            timeoutSeconds: {{ .timeoutSeconds | default 2 }}
+            failureThreshold: {{ .failureThreshold | default 3 }}
+            successThreshold: {{ .successThreshold | default 1 }}
+          {{- end }}
+          {{- with .Values.probes.backend.liveness }}
           livenessProbe:
             httpGet:
-              path: /api/healthz
+              path: {{ .path | default "/api/healthz" }}
               port: 8000
-            initialDelaySeconds: 15
-            periodSeconds: 30
-            failureThreshold: 3
+            initialDelaySeconds: {{ .initialDelaySeconds | default 40 }}
+            periodSeconds: {{ .periodSeconds | default 30 }}
+            timeoutSeconds: {{ .timeoutSeconds | default 2 }}
+            failureThreshold: {{ .failureThreshold | default 3 }}
+            successThreshold: {{ .successThreshold | default 1 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.image.backend.resources | nindent 12 }}
           securityContext:
