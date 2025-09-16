@@ -11,7 +11,7 @@ set -euo pipefail
 ensure_ns() {
   local ns="$1"
   if ! kubectl get ns "$ns" >/dev/null 2>&1; then
-    log "Creating namespace $ns"
+    echo "Creating namespace $ns"
     kubectl create namespace "$ns"
   fi
 }
@@ -22,7 +22,7 @@ ensure_ns() {
 KYVERNO_NS="kyverno"
 ensure_ns "$KYVERNO_NS"
 if ! helm ls -n "$KYVERNO_NS" | grep -q "kyverno"; then
-  log "Installing Kyverno"
+  echo "Installing Kyverno"
   helm repo add kyverno https://kyverno.github.io/kyverno/ 
   helm repo update
   helm install kyverno kyverno/kyverno -n "$KYVERNO_NS" \
@@ -30,7 +30,7 @@ if ! helm ls -n "$KYVERNO_NS" | grep -q "kyverno"; then
     --set backgroundController.replicas=1 \
     --set cleanupController.replicas=1
 else
-  log "Kyverno already installed"
+  echo "Kyverno already installed"
 fi
 
 helm install kyverno-policies kyverno/kyverno-policies -n kyverno
@@ -39,13 +39,13 @@ helm install kyverno-policies kyverno/kyverno-policies -n kyverno
 # Tetragon
 ########################
 if ! helm ls -n "$TETRAGON_NS" | grep -q tetragon; then
-  log "Installing Tetragon"
+  echo "Installing Tetragon"
   helm repo add cilium https://helm.cilium.io/ 
   helm repo update 
   helm install tetragon ${EXTRA_HELM_FLAGS[@]} cilium/tetragon -n kube-system
   kubectl rollout status -n kube-system ds/tetragon -w
 else
-  log "Tetragon already installed"
+  echo "Tetragon already installed"
 fi
 
 ########################
@@ -56,7 +56,7 @@ RUNNER_NS="actions-runner"
 ensure_ns "$ARC_NS"
 ensure_ns "$RUNNER_NS"
 if ! helm ls -n "$ARC_NS" | grep -q actions-runner-controller; then
-    log "Installing ARC (PAT auth)"
+    echo "Installing ARC (PAT auth)"
     helm repo add actions-runner-controller oci://ghcr.io/actions/actions-runner-controller-charts 
     helm repo update 
     helm install arc --namespace "${ARC_NS}" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
@@ -66,9 +66,9 @@ if ! helm ls -n "$ARC_NS" | grep -q actions-runner-controller; then
         --set githubConfigSecret.github_token="${GITHUB_PAT}" \
         oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
 
-  log "ARC controller installed."
+  echo "ARC controller installed."
 else
-  log "ARC already installed"
+  echo "ARC already installed"
 fi
 
-log "All addon steps attempted."
+echo "All addon steps attempted."
