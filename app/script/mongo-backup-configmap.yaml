@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongo-backup-script
+  namespace: birthdayapp
+  labels:
+    app: mongo-backup
+data:
+  mongo_backup.py: |-
+    #!/usr/bin/env python3
+    """Simple MongoDB backup script (ConfigMap version).
+    Canonical source: app/script/mongo_backup.py
+    """
+    import os
+    import sys
+    import subprocess
+    import datetime
+    import tempfile
+    import shutil
+    try:
+        from azure.storage.blob import BlobServiceClient
+        AZ_ENABLED = True
+    except Exception:
+        AZ_ENABLED = False
+    def log(m: str):
+        print(f"[mongo-backup] {m}", flush=True)
+    def run(cmd):
+        log(f"RUN: {' '.join(cmd)}")
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r.returncode != 0:
+            log(r.stdout)
+            raise RuntimeError(f"cmd failed {r.returncode}")
+    def main():
+        uri = os.getenv("MONGO_URI")
+        if not uri:
+            log("MONGO_URI missing")
+            return 1
+        db = os.getenv("MONGO_DB_NAME", "birthdays_db")
+        pre = os.getenv("BACKUP_PREFIX", "mongo-backup")
+        keep = int(os.getenv("RETENTION", "7"))
+        ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        base = f"{pre}-{db}-{ts}"
+        wd = tempfile.mkdtemp(prefix="mongo-bak-")
+        dump = os.path.join(wd, "dump")
+        arc = os.path.join(wd, f"{base}.tar.gz")
+        try:
+            run(["mongodump", "--uri", uri, "--db", db, "--out", dump])
+            run(["tar", "-czf", arc, "-C", dump, "."])\n+            log(f"Archive {arc} size={os.path.getsize(arc)}")
+            acct = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+            cont = os.getenv("AZURE_BLOB_CONTAINER")
+            conn = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+            if acct and cont and AZ_ENABLED:
+                if conn:
+                    svc = BlobServiceClient.from_connection_string(conn)
+                else:
+                    from azure.identity import DefaultAzureCredential
+                    svc = BlobServiceClient(f"https://{acct}.blob.core.windows.net", credential=DefaultAzureCredential())
+                cc = svc.get_container_client(cont)
+                try:
+                    cc.create_container()
+                except Exception:
+                    pass
+                with open(arc, 'rb') as f:
+                    cc.upload_blob(name=f"{base}.tar.gz", data=f, overwrite=True, content_type="application/gzip")
+                log("Uploaded")
+                if keep > 0:
+                    blobs = sorted(list(cc.list_blobs(name_starts_with=f"{pre}-{db}-")), key=lambda b: b.last_modified, reverse=True)
+                    for b in blobs[keep:]:
+                        try:
+                            cc.delete_blob(b.name)
+                            log(f"Pruned {b.name}")
+                        except Exception as e:
+                            log(f"Prune failed {b.name}: {e}")
+            else:
+                log("Azure disabled; retaining locally")
+                log(f"Local path {arc}")
+            return 0
+        except Exception as e:
+            log(f"Failed: {e}")
+            return 2
+        finally:
+            if os.getenv("DEBUG_RETAIN") != "1" and os.getenv("AZURE_STORAGE_ACCOUNT_NAME") and os.getenv("AZURE_BLOB_CONTAINER"):
+                shutil.rmtree(wd, ignore_errors=True)
+    if __name__ == "__main__":
+        sys.exit(main())

@@ -57,8 +57,6 @@ ensure_ns "$ARC_NS"
 ensure_ns "$RUNNER_NS"
 if ! helm ls -n "$ARC_NS" | grep -q actions-runner-controller; then
     echo "Installing ARC (PAT auth)"
-    helm repo add actions-runner-controller oci://ghcr.io/actions/actions-runner-controller-charts 
-    helm repo update 
     helm install arc --namespace "${ARC_NS}" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
     helm install arc-runner-set \
         --namespace "${RUNNER_NS}" \

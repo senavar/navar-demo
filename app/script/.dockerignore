@@ -1,0 +1,9 @@
+# Exclude everything not needed for the backup image
+*.pyc
+__pycache__/
+.env
+# Git
+.git
+.gitignore
+# Other potential large dirs
+node_modules/
