@@ -14,7 +14,6 @@ data "azurerm_client_config" "current" {}
 
 data "azurerm_user_assigned_identity" "app" {
   name                = "uami-${var.environment}-navarapp-wi"
-  location            = var.location
   resource_group_name = var.core_resource_group_name
 }
 
@@ -58,7 +57,7 @@ resource "kubernetes_manifest" "app_secret" {
       provider = "azure"
       parameters = {
         usePodIdentity = "false"
-        clientID       = azurerm_user_assigned_identity.app.principal_id
+        clientID       = data.azurerm_user_assigned_identity.app.client_id
         keyvaultName   = var.core_key_vault_name
         tenantId       = data.azurerm_client_config.current.tenant_id
         objects        = <<EOT
@@ -73,7 +72,7 @@ resource "kubernetes_manifest" "app_secret" {
 }
 output "workload_identity_id" {
   description = "Resource ID of the user-assigned workload identity for Key Vault access."
-  value       = azurerm_user_assigned_identity.app.id
+  value       = data.azurerm_user_assigned_identity.app.id
 }
 
 output "workload_identity_service_account" {
