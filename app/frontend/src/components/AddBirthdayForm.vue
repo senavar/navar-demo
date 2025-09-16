@@ -143,16 +143,18 @@ async function addBirthday() {
       body: formData
     })
     if (!response.ok) {
-      let friendly = 'Failed to add birthday.'
+      let friendly = `Failed to add birthday (HTTP ${response.status}).`
       try {
         const errorData = await response.json()
-        if (errorData && Array.isArray(errorData.errors) && errorData.errors.length) {
+        if (errorData) {
+          if (Array.isArray(errorData.errors) && errorData.errors.length) {
             friendly = errorData.errors.join('; ')
-        } else if (errorData && errorData.message) {
-            friendly = errorData.message
+          } else if (errorData.message) {
+            friendly = `${errorData.message} (HTTP ${response.status})`
+          }
         }
       } catch (e) {
-        // swallow JSON parse errors
+        // ignore JSON parse errors
       }
       throw new Error(friendly)
     }

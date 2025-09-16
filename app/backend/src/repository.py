@@ -256,6 +256,54 @@ def mongo_status() -> Dict[str, Any]:
     }
 
 
+def mongo_connectivity_diagnostics() -> Dict[str, Any]:
+    """Actively verify Mongo connectivity (if configured) by issuing a ping and returning details.
+
+    Returns a dict:
+      {
+        'configured': bool,
+        'ping_ok': bool | None,
+        'error': str | None,
+        'using_mongo': bool,
+        'db_name': str,
+        'collection': str
+      }
+    """
+    _init_mongo_if_possible()
+    db_name = os.getenv("MONGO_DB_NAME", "birthdays_db")
+    coll_name = os.getenv("MONGO_COLLECTION_NAME", "birthdays")
+    if not _using_mongo or _mongo_collection is None:
+        return {
+            "configured": False,
+            "ping_ok": None,
+            "error": _mongo_last_error,
+            "using_mongo": False,
+            "db_name": db_name,
+            "collection": coll_name,
+        }
+    # Attempt ping
+    try:
+        client = _mongo_collection.database.client  # type: ignore[attr-defined]
+        client.admin.command("ping")
+        return {
+            "configured": True,
+            "ping_ok": True,
+            "error": None,
+            "using_mongo": True,
+            "db_name": db_name,
+            "collection": coll_name,
+        }
+    except Exception as e:  # pragma: no cover - best effort
+        return {
+            "configured": True,
+            "ping_ok": False,
+            "error": str(e),
+            "using_mongo": True,
+            "db_name": db_name,
+            "collection": coll_name,
+        }
+
+
 # Kick off hot-reload initialization early
 try:
     mongo_config.init_and_watch(_rotation_callback)

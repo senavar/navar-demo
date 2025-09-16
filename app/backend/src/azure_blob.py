@@ -116,3 +116,57 @@ def get_blob_url(blob_name: str) -> Optional[str]:
 	if fmt:
 		return fmt.format(container=container, blob=blob_name)
 	return f"https://{account}.blob.core.windows.net/{container}/{blob_name}"
+
+
+def blob_connectivity_diagnostics() -> dict:
+	"""Return connectivity diagnostics for Azure Blob.
+
+	Structure:
+	  {
+	    'configured': bool,
+	    'container_exists': bool | None,
+	    'can_list': bool | None,
+	    'error': str | None,
+	    'account': str | None,
+	    'container': str | None
+	  }
+	"""
+	_ensure_initialized()
+	account = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+	container = os.getenv("AZURE_BLOB_CONTAINER")
+	if not _available:
+		return {
+			"configured": False,
+			"container_exists": None,
+			"can_list": None,
+			"error": None,
+			"account": account,
+			"container": container,
+		}
+	try:
+		# Probe: get container props & attempt a small list operation (empty max 1)
+		_container_client_cache.get_container_properties()
+		container_exists = True
+		try:
+			# list_blobs returns generator; pull first safely
+			next(_container_client_cache.list_blobs(name_starts_with=None, results_per_page=1), None)
+			can_list = True
+		except Exception:
+			can_list = False
+		return {
+			"configured": True,
+			"container_exists": container_exists,
+			"can_list": can_list,
+			"error": None,
+			"account": account,
+			"container": container,
+		}
+	except Exception as e:  # pragma: no cover
+		return {
+			"configured": True,
+			"container_exists": False,
+			"can_list": False,
+			"error": str(e),
+			"account": account,
+			"container": container,
+		}

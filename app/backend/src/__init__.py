@@ -1,5 +1,8 @@
 import os
 from flask import Flask
+from .repository import mongo_connectivity_diagnostics
+from . import azure_blob
+from .azure_blob import blob_connectivity_diagnostics
 
 def create_app(test_config=None):
     # create and configure the app
@@ -38,5 +41,36 @@ def create_app(test_config=None):
     # The api blueprint is what needs to be registered.
     from . import api
     app.register_blueprint(api.bp)
+
+    # --- STARTUP DIAGNOSTICS ---
+    try:
+        mongo_diag = mongo_connectivity_diagnostics()
+        app.logger.info(
+            "startup.mongo status configured=%s using=%s ping_ok=%s db=%s collection=%s error=%s", 
+            mongo_diag.get('configured'),
+            mongo_diag.get('using_mongo'),
+            mongo_diag.get('ping_ok'),
+            mongo_diag.get('db_name'),
+            mongo_diag.get('collection'),
+            mongo_diag.get('error')
+        )
+    except Exception as e:  # pragma: no cover
+        app.logger.warning(f"startup.mongo diagnostics failed: {e}")
+
+    try:
+        # Force azure blob init to populate caches
+        azure_blob.is_configured()
+        blob_diag = blob_connectivity_diagnostics()
+        app.logger.info(
+            "startup.blob status configured=%s container_exists=%s can_list=%s account=%s container=%s error=%s",
+            blob_diag.get('configured'),
+            blob_diag.get('container_exists'),
+            blob_diag.get('can_list'),
+            blob_diag.get('account'),
+            blob_diag.get('container'),
+            blob_diag.get('error')
+        )
+    except Exception as e:  # pragma: no cover
+        app.logger.warning(f"startup.blob diagnostics failed: {e}")
 
     return app

@@ -72,15 +72,30 @@ def storage_status():
 
 @bp.route('/birthdays', methods=['POST'])
 def create_birthday():
-    """Adds a new birthday, handling an optional file upload."""
+    """Adds a new birthday, handling an optional file upload.
+
+    Supports multipart/form-data (primary) and application/json (fallback) to ease
+    debugging when proxies strip multipart bodies.
+    """
+    # Log request envelope (non-PII) for diagnostics
+    try:
+        current_app.logger.info(
+            "create_birthday inbound content_type=%s len_form=%d len_files=%d", 
+            request.content_type,
+            len(request.form or {}),
+            len(request.files or {}),
+        )
+    except Exception:
+        pass
+
     unique_filename = None
+    # Handle optional picture
     if 'profile_picture' in request.files:
         file = request.files['profile_picture']
         if file and file.filename != '' and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            unique_filename = str(uuid.uuid4()) + '_' + filename
+            unique_filename = f"{uuid.uuid4()}_{filename}"
             if azure_blob.is_configured():
-                # Upload to blob storage
                 blob_name, _ = azure_blob.upload_image(file, unique_filename)
                 if blob_name:
                     unique_filename = blob_name
@@ -93,51 +108,80 @@ def create_birthday():
         elif file and file.filename != '':
             return jsonify({"message": "Invalid file type"}), 400
 
-    try:
-        name = request.form.get('name', '').strip()
+    # Extract payload (form first, JSON fallback)
+    payload_source = 'form'
+    if (request.is_json and not request.form) or (request.is_json and 'name' not in request.form):
+        data = request.get_json(silent=True) or {}
+        payload_source = 'json'
+        raw_name = (data.get('name') or '').strip()
+        year_raw = data.get('year')
+        month_raw = data.get('month')
+        day_raw = data.get('day')
+    else:
+        raw_name = (request.form.get('name') or '').strip()
         year_raw = request.form.get('year')
         month_raw = request.form.get('month')
         day_raw = request.form.get('day')
 
-        # Basic presence / type checks
+    # Coerce / validate
+    errors = []
+    name = raw_name
+    try:
         year = int(year_raw) if year_raw not in (None, '') else None
+    except ValueError:
+        errors.append("Year must be an integer")
+        year = None
+    try:
         month = int(month_raw) if month_raw not in (None, '') else None
+    except ValueError:
+        errors.append("Month must be an integer")
+        month = None
+    try:
         day = int(day_raw) if day_raw not in (None, '') else None
+    except ValueError:
+        errors.append("Day must be an integer")
+        day = None
 
-        errors = []
-        if not name:
-            errors.append("Name is required")
-        if year is None or year < 1900 or year > 2100:
-            errors.append("Year must be a 4-digit number between 1900 and 2100")
-        if month is None or month < 1 or month > 12:
-            errors.append("Month must be between 1 and 12")
-        if day is None or day < 1 or day > 31:
-            errors.append("Day must be between 1 and 31")
+    if not name:
+        errors.append("Name is required")
+    if year is None or year < 1900 or year > 2100:
+        errors.append("Year must be a 4-digit number between 1900 and 2100")
+    if month is None or month < 1 or month > 12:
+        errors.append("Month must be between 1 and 12")
+    if day is None or day < 1 or day > 31:
+        errors.append("Day must be between 1 and 31")
 
-        # Date consistency check (handles leap years, invalid combos like Apr 31)
-        if not errors and (year is not None and month is not None and day is not None):
-            from datetime import date
-            try:
-                date(year, month, day)
-            except ValueError as ve:  # invalid calendar date
-                errors.append(f"Invalid calendar date: {ve}")
+    # Calendar validation
+    if not errors and all(v is not None for v in (year, month, day)):
+        from datetime import date
+        try:
+            date(year, month, day)
+        except ValueError as ve:
+            errors.append(f"Invalid calendar date: {ve}")
 
-        if errors:
-            # Provide a clear structured error instead of a vague pattern message
-            return jsonify({"message": "Validation failed", "errors": errors}), 400
+    if errors:
+        try:
+            current_app.logger.warning(
+                "create_birthday validation_errors=%s source=%s", errors, payload_source
+            )
+        except Exception:
+            pass
+        return jsonify({
+            "message": "Validation failed",
+            "errors": errors,
+            "source": payload_source
+        }), 400
 
-        new_person = {
-            "name": name,
-            "year": year,
-            "month": month,
-            "day": day,
-            "profile_picture": unique_filename
-        }
-    except (KeyError, ValueError) as e:
-        return jsonify({"message": f"Invalid form data provided: {e}"}), 400
+    new_person = {
+        "name": name,
+        "year": year,
+        "month": month,
+        "day": day,
+        "profile_picture": unique_filename
+    }
 
-    add_new_birthday(new_person)
-    return jsonify({"message": "Birthday added successfully"}), 201
+    added = add_new_birthday(new_person)
+    return jsonify({"message": "Birthday added successfully", "person": added}), 201
 
 @bp.route('/birthdays/<int:id>', methods=['PUT'])
 def update_birthday(id):
@@ -145,7 +189,6 @@ def update_birthday(id):
     person = get_birthday_by_id(id)
     if not person:
         return jsonify({"message": "Birthday not found"}), 404
-
     try:
         update_data = {
             "name": request.form['name'],
