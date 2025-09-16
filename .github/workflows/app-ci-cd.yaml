@@ -195,21 +195,40 @@ jobs:
         run: echo "digest=${{ steps.build_backend.outputs.digest }}" >> $GITHUB_OUTPUT
       - name: Lint Helm Chart
         run: |
-          helm lint charts/birthdayapp
+          helm lint k8s/manifests/charts/birthdayapp
       - name: Package Helm Chart
+        id: package_helm_chart
         run: |
+          set -euo pipefail
           mkdir -p dist
-          PKG_VERSION="${{ needs.setup.outputs.SEMVER }}"; if [ -z "$PKG_VERSION" ]; then PKG_VERSION="0.1.0+${{ needs.setup.outputs.SHORT_SHA }}"; fi
-          APP_VERSION="${{ needs.setup.outputs.SEMVER }}"; if [ -z "$APP_VERSION" ]; then APP_VERSION="${{ needs.setup.outputs.SHORT_SHA }}"; fi
-          helm package charts/birthdayapp --version "$PKG_VERSION" --app-version "$APP_VERSION" -d dist
-      - name: Upload Helm Chart Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: helm-chart
-          path: dist/*.tgz
+          # Construct an OCI-safe chart version (no '+') for non-semver builds
+          if [ -n "${{ needs.setup.outputs.SEMVER }}" ]; then
+            PKG_VERSION="${{ needs.setup.outputs.SEMVER }}"
+            APP_VERSION="${{ needs.setup.outputs.SEMVER }}"
+          else
+            PKG_VERSION="0.1.0-sha.${{ needs.setup.outputs.SHORT_SHA }}"
+            APP_VERSION="${{ needs.setup.outputs.SHORT_SHA }}"
+          fi
+          echo "Chart Version: $PKG_VERSION  App Version: $APP_VERSION"
+          CHART_DIR=k8s/manifests/charts/birthdayapp
+          helm package "$CHART_DIR" --version "$PKG_VERSION" --app-version "$APP_VERSION" -d dist
+          CHART_TGZ=$(ls dist/birthdayapp-*.tgz)
+          echo "Packaged chart: $CHART_TGZ"
+          # Login to dev ACR for Helm (token based, no docker)
+          DEV_ACR_NAME=${REGISTRY_DEV%%.*}
+          TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
+          DEV_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.accessToken')
+          if [ -z "$DEV_TOKEN" ]; then echo "Failed to get ACR token for Helm push" >&2; exit 1; fi
+          # Helm OCI push (ensure OCI is enabled)
+          export HELM_EXPERIMENTAL_OCI=1
+          helm registry login ${REGISTRY_DEV} --username 00000000-0000-0000-0000-000000000000 --password "$DEV_TOKEN"
+          helm push "$CHART_TGZ" oci://${REGISTRY_DEV}/helm
+          echo "Helm chart pushed to oci://${REGISTRY_DEV}/helm/birthdayapp:$PKG_VERSION"
+          echo "chart_version=$PKG_VERSION" >> $GITHUB_OUTPUT
     outputs:
       FRONTEND_DIGEST: ${{ steps.digest_frontend.outputs.digest }}
       BACKEND_DIGEST: ${{ steps.digest_backend.outputs.digest }}
+      CHART_VERSION: ${{ steps.package_helm_chart.outputs.chart_version }}
 
   deploy-dev:
     name: Deploy to Dev AKS with Helm
@@ -223,6 +242,7 @@ jobs:
       BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
       SEMVER: ${{ needs.setup.outputs.SEMVER }}
       SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+      CHART_VERSION: ${{ needs.build.outputs.CHART_VERSION }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup Azure Tooling (az, kubectl, helm)
@@ -241,10 +261,13 @@ jobs:
             echo "Image digests empty (build-only run). Skipping Helm deploy."; exit 0
           fi
           RELEASE=birthdayapp
-          CHART=./charts/birthdayapp
+          CHART_REF=oci://${REGISTRY_DEV}/helm/birthdayapp
+          CVERSION="$CHART_VERSION"
           APP_VERSION="${SEMVER:-$SHORT_SHA}"
           # appVersionOverride feeds version label; cannot override Chart.appVersion at runtime
-          helm upgrade --install "$RELEASE" "$CHART" \
+          export HELM_EXPERIMENTAL_OCI=1
+          helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar
+          helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${NAMESPACE}" \
             --set global.registry="${REGISTRY_DEV}" \
             --set global.namespace="${NAMESPACE}" \
@@ -294,6 +317,7 @@ jobs:
         env:
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
           SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+          CHART_VERSION: ${{ needs.build.outputs.CHART_VERSION }}
         run: |
           set -euo pipefail
           FRONT=${{ needs.build.outputs.FRONTEND_DIGEST }}
@@ -314,12 +338,20 @@ jobs:
             echo "Copying backend@$BACK to ${REGISTRY_PROD}/birthdayapp/backend:${TAG}" 
             crane copy ${REGISTRY_DEV}/birthdayapp/backend@${BACK} ${REGISTRY_PROD}/birthdayapp/backend:${TAG}
           done
+          # Promote Helm chart
+          if [ -n "$CHART_VERSION" ]; then
+            echo "Copying Helm chart birthdayapp:$CHART_VERSION to prod registry"
+            crane copy ${REGISTRY_DEV}/helm/birthdayapp:${CHART_VERSION} ${REGISTRY_PROD}/helm/birthdayapp:${CHART_VERSION}
+          else
+            echo "No chart version found; skipping chart promotion" >&2
+          fi
           echo "Promotion copy complete"
       - name: Deploy to prod AKS with Helm
         env:
           FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACKEND_DIGEST: ${{ needs.build.outputs.BACKEND_DIGEST }}
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
+          CHART_VERSION: ${{ needs.build.outputs.CHART_VERSION }}
         run: |
           PROD_NS="birthdayapp" 
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
@@ -330,10 +362,13 @@ jobs:
             echo "Missing digests; cannot deploy to prod."; exit 1
           fi
           RELEASE=birthdayapp
-          CHART=./charts/birthdayapp
+          CHART_REF=oci://${REGISTRY_PROD}/helm/birthdayapp
+          CVERSION="$CHART_VERSION"
           APP_VERSION="$SEMVER"
           # Use appVersionOverride for runtime version labeling
-          helm upgrade --install "$RELEASE" "$CHART" \
+          export HELM_EXPERIMENTAL_OCI=1
+          helm pull "$CHART_REF" --version "$CVERSION" -d /tmp --untar || true
+          helm upgrade --install "$RELEASE" "$CHART_REF" --version "$CVERSION" \
             --namespace "${PROD_NS}" \
             --set global.registry="${REGISTRY_PROD}" \
             --set global.namespace="$PROD_NS" \
