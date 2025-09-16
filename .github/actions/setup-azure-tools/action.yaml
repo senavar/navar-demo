@@ -5,14 +5,6 @@ inputs:
     description: "Specific Helm version (e.g. v3.15.0). If empty, latest script-managed version is installed."
     required: false
     default: ""
-  kubectl-version:
-    description: "Specific kubectl version (e.g. v1.30.3). If empty, latest stable is used."
-    required: false
-    default: ""
-  architecture:
-    description: "Override architecture (amd64, arm64, arm, ppc64le, s390x). Auto-detected if blank."
-    required: false
-    default: ""
 runs:
   using: "composite"
   steps:
@@ -22,27 +14,6 @@ runs:
         set -euo pipefail
         mkdir -p "$HOME/.local/bin"
         echo "Prepared user bin directory at $HOME/.local/bin"
-    - name: Detect architecture
-      id: arch
-      shell: bash
-      run: |
-        set -euo pipefail
-        INPUT_ARCH="${{ inputs.architecture }}"
-        if [ -n "$INPUT_ARCH" ]; then
-          ARCH_NORM="$INPUT_ARCH"
-        else
-          RAW=$(uname -m)
-          case "$RAW" in
-            x86_64|amd64) ARCH_NORM=amd64 ;;
-            aarch64|arm64) ARCH_NORM=arm64 ;;
-            armv7l|armv7) ARCH_NORM=arm ;;
-            ppc64le) ARCH_NORM=ppc64le ;;
-            s390x) ARCH_NORM=s390x ;;
-            *) echo "Unknown architecture $RAW; defaulting to amd64"; ARCH_NORM=amd64 ;;
-          esac
-        fi
-        echo "normalized_arch=$ARCH_NORM" >> $GITHUB_OUTPUT
-        echo "Detected/Selected architecture: $ARCH_NORM"
     - name: Install Azure CLI (if missing)
       id: install-az
       shell: bash
@@ -68,43 +39,18 @@ runs:
         if command -v kubectl >/dev/null 2>&1; then
           echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || true)"
         else
-          echo "Installing kubectl (direct download)"
-          REQ_VER="${{ inputs.kubectl-version }}"
-          if [ -z "$REQ_VER" ]; then
-            REQ_VER=$(curl -Ls https://dl.k8s.io/release/stable.txt)
+          echo "Installing kubectl via az aks install-cli (uses Microsoft-managed default version)"
+          az aks install-cli
+          # Ensure kubectl ends up in a PATH dir; copy to user bin if necessary
+          if ! command -v kubectl >/dev/null 2>&1; then
+            if [ -f /usr/local/bin/kubectl ]; then
+              cp /usr/local/bin/kubectl "$HOME/.local/bin/kubectl" || true
+            elif [ -f ./kubectl ]; then
+              mv ./kubectl "$HOME/.local/bin/kubectl" || true
+            fi
           fi
-          ARCH="${{ steps.arch.outputs.normalized_arch }}"
-          OS=linux
-          echo "Using kubectl version: $REQ_VER (arch: $ARCH)"
-          curl -L "https://dl.k8s.io/release/${REQ_VER}/bin/${OS}/${ARCH}/kubectl" -o "$HOME/.local/bin/kubectl"
-          chmod +x "$HOME/.local/bin/kubectl"
-          echo "Installed kubectl: $($HOME/.local/bin/kubectl version --client --short 2>/dev/null || true)"
+          echo "kubectl after install: $(kubectl version --client --short 2>/dev/null || true)"
         fi
-
-    - name: Install kubelogin (if missing)
-      shell: bash
-      run: |
-        set -euo pipefail
-        if command -v kubelogin >/dev/null 2>&1; then
-          echo "kubelogin already installed: $(kubelogin --version 2>/dev/null || true)"
-          exit 0
-        fi
-        echo "Installing kubelogin..."
-        OS=linux
-        ARCH="${{ steps.arch.outputs.normalized_arch }}"
-        # Fetch latest tag
-        VERSION=$(curl -s https://api.github.com/repos/Azure/kubelogin/releases/latest | grep tag_name | cut -d '"' -f4)
-        echo "Latest kubelogin release: $VERSION"
-        curl -sSL -o kubelogin.tgz "https://github.com/Azure/kubelogin/releases/download/${VERSION}/kubelogin-${OS}-${ARCH}.tar.gz"
-        tar -xzf kubelogin.tgz
-        if [ -f kubelogin ]; then
-          mv kubelogin "$HOME/.local/bin/"
-        else
-          mv bin/${OS}_${ARCH}/kubelogin "$HOME/.local/bin/"
-        fi
-        rm -rf kubelogin.tgz bin
-        chmod +x "$HOME/.local/bin/kubelogin"
-        kubelogin --version || true
 
     - name: Install Helm (if missing or version requested)
       shell: bash
@@ -158,7 +104,5 @@ runs:
         echo "Tool versions:";
         command -v az && az version | head -n 1 || echo "az missing";
         command -v kubectl && kubectl version --client --short || echo "kubectl missing";
-        command -v kubelogin && kubelogin --version || echo "kubelogin missing";
         command -v helm && helm version --short || echo "helm missing";
-        echo "Architecture used: ${{ steps.arch.outputs.normalized_arch }}";
-        echo "kubectl desired version input: '${{ inputs.kubectl-version }}'";
+        echo "Simplified install (kubectl via az aks install-cli) complete.";
