@@ -118,9 +118,8 @@ jobs:
       - name: ACR Login
         if: steps.pushpolicy.outputs.allow_push == 'true'
         run: |
-          ACR_NAME=${REGISTRY_DEV%%.*}
-          echo "Logging into Dev ACR: $ACR_NAME (${REGISTRY_DEV})"
-          az acr login --name "$ACR_NAME"
+          echo "Skipping docker-based az acr login (not required for az acr build)."
+          echo "Using Azure CLI context auth for remote build operations instead."
       - name: Build Frontend (ACR Remote)
         id: build_frontend
         run: |
@@ -277,10 +276,20 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
       - name: Login to ACRs
         run: |
+          set -euo pipefail
           DEV_ACR_NAME=${REGISTRY_DEV%%.*}
           PROD_ACR_NAME=${REGISTRY_PROD%%.*}
-          az acr login --name "$DEV_ACR_NAME"
-          az acr login --name "$PROD_ACR_NAME"
+          echo "Obtaining access tokens for ACRs without docker daemon (using --expose-token)"
+          DEV_TOKEN_JSON=$(az acr login --name "$DEV_ACR_NAME" --expose-token -o json)
+          PROD_TOKEN_JSON=$(az acr login --name "$PROD_ACR_NAME" --expose-token -o json)
+          DEV_PASSWORD=$(echo "$DEV_TOKEN_JSON" | jq -r '.accessToken')
+          PROD_PASSWORD=$(echo "$PROD_TOKEN_JSON" | jq -r '.accessToken')
+          if [ -z "$DEV_PASSWORD" ] || [ -z "$PROD_PASSWORD" ]; then
+            echo "Failed to obtain registry tokens" >&2; exit 1; fi
+          echo "Logging into registries with crane auth login"
+          crane auth login ${REGISTRY_DEV} -u 00000000-0000-0000-0000-000000000000 -p "$DEV_PASSWORD"
+          crane auth login ${REGISTRY_PROD} -u 00000000-0000-0000-0000-000000000000 -p "$PROD_PASSWORD"
+          echo "ACR token-based auth configured for crane operations"
       - name: Promote images to prod ACR (client copy)
         env:
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
