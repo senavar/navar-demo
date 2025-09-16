@@ -1,0 +1,110 @@
+name: "Setup Azure Tooling"
+description: "Installs Azure CLI, kubectl, kubelogin, and Helm on self-hosted ARC runners"
+inputs:
+  helm-version:
+    description: "Specific Helm version (e.g. v3.15.0). If empty, latest script-managed version is installed."
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Install Azure CLI (if missing)
+      id: install-az
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v az >/dev/null 2>&1; then
+          echo "Azure CLI already present: $(az version 2>/dev/null | grep 'azure-cli' || true)"
+        else
+          echo "Installing Azure CLI..."
+          # Detect distro (assuming Debian/Ubuntu for ARC runner base). Adjust if needed.
+          if [ -f /etc/debian_version ]; then
+            curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          else
+            curl -sL https://aka.ms/InstallAzureCli | bash
+          fi
+        fi
+        az version | head -n 1 || true
+
+    - name: Install kubectl (if missing)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v kubectl >/dev/null 2>&1; then
+          echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || true)"
+        else
+          echo "Installing kubectl via az aks install-cli"
+          az aks install-cli
+        fi
+
+    - name: Install kubelogin (if missing)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v kubelogin >/dev/null 2>&1; then
+          echo "kubelogin already installed: $(kubelogin --version 2>/dev/null || true)"
+          exit 0
+        fi
+        echo "Installing kubelogin..."
+        OS=linux
+        ARCH=amd64
+        # Fetch latest tag
+        VERSION=$(curl -s https://api.github.com/repos/Azure/kubelogin/releases/latest | grep tag_name | cut -d '"' -f4)
+        echo "Latest kubelogin release: $VERSION"
+        curl -sSL -o kubelogin.tgz "https://github.com/Azure/kubelogin/releases/download/${VERSION}/kubelogin-${OS}-${ARCH}.tar.gz"
+        tar -xzf kubelogin.tgz
+        sudo mv kubelogin /usr/local/bin/ 2>/dev/null || sudo mv bin/${OS}_${ARCH}/kubelogin /usr/local/bin/
+        rm -rf kubelogin.tgz bin
+        kubelogin --version || true
+
+    - name: Install Helm (if missing or version requested)
+      shell: bash
+      run: |
+        set -euo pipefail
+        WANT="${{ inputs.helm-version }}"
+        if command -v helm >/dev/null 2>&1; then
+          CURR=$(helm version --short 2>/dev/null || true)
+          echo "Existing Helm: $CURR"
+          if [ -n "$WANT" ] && ! echo "$CURR" | grep -q "$WANT"; then
+            echo "Re-installing Helm to match $WANT"
+          else
+            if [ -z "$WANT" ]; then
+              echo "Keeping existing Helm installation."; exit 0
+            fi
+          fi
+        fi
+        echo "Installing Helm (requested version: ${WANT:-latest})"
+        if [ -n "$WANT" ]; then
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash -s -- --version "$WANT"
+        else
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        fi
+        helm version --short || true
+
+    - name: Add tool directories to PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Collect potential install locations and append if not already present.
+        ADDED=0
+        for d in /usr/local/bin /usr/bin "$HOME/bin"; do
+          if [ -d "$d" ]; then
+            # Avoid duplicate lines in $GITHUB_PATH (GitHub does not deduplicate automatically across runs)
+            if ! echo "$PATH" | tr ':' '\n' | grep -Fxq "$d"; then
+              echo "$d" >> "$GITHUB_PATH"
+              ADDED=$((ADDED+1))
+            fi
+          fi
+        done
+        echo "Appended $ADDED directory(ies) to PATH context.";
+        echo "Resulting PATH preview:";
+        echo "$PATH" | tr ':' '\n' | head -n 25
+
+    - name: Summary
+      shell: bash
+      run: |
+        echo "Tool versions:";
+        command -v az && az version | head -n 1 || echo "az missing";
+        command -v kubectl && kubectl version --client --short || echo "kubectl missing";
+        command -v kubelogin && kubelogin --version || echo "kubelogin missing";
+        command -v helm && helm version --short || echo "helm missing";

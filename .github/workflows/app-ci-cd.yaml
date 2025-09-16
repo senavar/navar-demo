@@ -57,6 +57,7 @@ jobs:
         sarif_file: ${{ steps.msdo.outputs.sarifFile }}
 
   setup:
+    name: Setup - Determine Versioning and SHA
     runs-on: arc-runner-set-dev
     needs: scan
     steps:
@@ -78,6 +79,7 @@ jobs:
       SHORT_SHA: ${{ steps.metadata.outputs.shortsha }}
 
   build:
+    name: Build and Push Images + Helm Chart
     runs-on: arc-runner-set-dev
     needs: setup
     env:
@@ -111,6 +113,8 @@ jobs:
           fi
           echo "allow_push=$ALLOW" >> $GITHUB_OUTPUT
           echo "ALLOW_PUSH=$ALLOW" >> $GITHUB_ENV
+      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+        uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         if: steps.pushpolicy.outputs.allow_push == 'true'
         uses: azure/login@v2
@@ -187,6 +191,7 @@ jobs:
       BACKEND_DIGEST: ${{ steps.digest_backend.outputs.digest }}
 
   deploy-dev:
+    name: Deploy to Dev AKS with Helm
     runs-on: arc-runner-set-dev
     environment: development
     needs: [setup, build]
@@ -199,8 +204,8 @@ jobs:
       SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+        uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -209,8 +214,6 @@ jobs:
         run: |
           FRONT="$FRONTEND_DIGEST"
           BACK="$BACKEND_DIGEST"
-          sudo az aks install-cli
-          export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_DEV }} -n ${{ secrets.AKS_CLUSTER_NAME_DEV }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
           if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
@@ -243,8 +246,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+      - name: Setup Azure Tooling (az, kubectl, kubelogin, helm)
+        uses: ./.github/actions/setup-azure-tools
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -279,8 +282,6 @@ jobs:
           SEMVER: ${{ needs.setup.outputs.SEMVER }}
         run: |
           PROD_NS="${NAMESPACE:-birthdayapp}" # PROD_NAMESPACE can be injected later if desired
-          sudo az aks install-cli
-          export PATH="/usr/local/bin:$PATH"
           az aks get-credentials -g ${{ secrets.AKS_RESOURCE_GROUP_PROD }} -n ${{ secrets.AKS_CLUSTER_NAME_PROD }} --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
           FRONT="$FRONTEND_DIGEST"
