@@ -38,7 +38,7 @@ fi
 ########################
 # Tetragon
 ########################
-if ! helm ls -n "$TETRAGON_NS" | grep -q tetragon; then
+if ! helm ls -n "kube-system" | grep -q tetragon; then
   echo "Installing Tetragon"
   helm repo add cilium https://helm.cilium.io/ 
   helm repo update 
