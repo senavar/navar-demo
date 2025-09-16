@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongo-backup
+  namespace: birthdayapp
+  labels:
+    app: mongo-backup
+spec:
+  schedule: "0 2 * * *" # nightly at 02:00 UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: mongo-backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: birthdayapp-sa
+          containers:
+            - name: backup
+              image: ghcr.io/senavar/mongo-backup:latest # Update tag via CI after build/push
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: MONGO_DB_NAME
+                  value: "birthdays_db"
+                - name: BACKUP_PREFIX
+                  value: "mongo-backup"
+                - name: RETENTION
+                  value: "7"
+                - name: AZURE_STORAGE_ACCOUNT_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: storage-config
+                      key: accountName
+                - name: AZURE_BLOB_CONTAINER
+                  valueFrom:
+                    secretKeyRef:
+                      name: storage-config
+                      key: containerName
+              volumeMounts:
+                - name: mongo-secret
+                  mountPath: /mnt/secrets-store
+                  readOnly: true
+              # ENTRYPOINT runs the script; no command override needed
+          volumes:
+            - name: mongo-secret
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: app-secret
