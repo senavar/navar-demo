@@ -41,6 +41,7 @@ async function loadFile() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const raw = await res.text()
     const lines = raw.split(/\r?\n/)
+    fileText.value = raw
   } catch (e) {
     error.value = 'Failed to load file: ' + e.message
   } finally {
