@@ -157,12 +157,7 @@ resource "azurerm_key_vault" "this" {
   enabled_for_deployment          = true
   enabled_for_template_deployment = true
   soft_delete_retention_days      = 7
-  network_acls {
-    bypass                     = "AzureServices"
-    default_action             = "Deny"
-    virtual_network_subnet_ids = [azurerm_subnet.aks_system.id, azurerm_subnet.aks_user.id]
-  }
-  tags = azurerm_resource_group.this.tags
+  tags                            = azurerm_resource_group.this.tags
 }
 
 resource "azurerm_role_assignment" "akv_admin" {
@@ -620,14 +615,14 @@ resource "azurerm_network_security_group" "mongodb" {
     destination_address_prefix = "*"
   }
   security_rule {
-    name                       = "AllowMongoFromVNet"
+    name                       = "AllowMongoFromAKS"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "27017"
-    source_address_prefix      = tolist(azurerm_virtual_network.this.address_space)[0]
+    source_address_prefix      = [azurerm_subnet.aks_system.address_prefixes[0], azurerm_subnet.aks_user.address_prefixes[0]]
     destination_address_prefix = "*"
   }
 }
