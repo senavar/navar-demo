@@ -1,0 +1,68 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongo-backup
+  namespace: birthdayapp-prod
+  labels:
+    app: mongo-backup
+spec:
+  schedule: "* 2 * * *"  
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: mongo-backup
+            azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: birthdayapp-sa
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: acrprodnavarlabv283.azurecr.io/mongodb/backupscript:prod
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: MONGO_URI_FILE
+                  value: /mnt/secrets-store/mongo-conn-string
+                - name: MONGO_DB
+                  value: birthdays_db
+                - name: BACKUP_PREFIX
+                  value: mongo-backup
+                - name: RETENTION
+                  value: "7"  
+                - name: AZURE_STORAGE_ACCOUNT_NAME
+                  value: stprodnavarlabv283
+                - name: AZURE_STORAGE_CONTAINER
+                  value: db-backups
+              volumeMounts:
+                - name: mongo-conn
+                  mountPath: /mnt/secrets-store
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: 300m
+                  memory: 384Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+          volumes:
+            - name: mongo-conn
+              csi:
+                driver: secrets-store.csi.k8s.io
+                readOnly: true
+                volumeAttributes:
+                  secretProviderClass: app-secrets

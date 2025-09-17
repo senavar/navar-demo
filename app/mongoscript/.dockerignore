@@ -7,3 +7,6 @@ __pycache__/
 .gitignore
 # Other potential large dirs
 node_modules/
+
+*.yaml
+*.md

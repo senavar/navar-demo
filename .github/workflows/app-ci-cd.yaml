@@ -35,6 +35,7 @@ env:
   NAMESPACE: ${{ vars.NAMESPACE }}
   FRONTEND_DIR: app/frontend
   BACKEND_DIR: app/backend
+  BACKUP_DIR: app/mongoscript
 
 jobs:
   scan:
@@ -115,11 +116,6 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: ACR Login
-        if: steps.pushpolicy.outputs.allow_push == 'true'
-        run: |
-          echo "Skipping docker-based az acr login (not required for az acr build)."
-          echo "Using Azure CLI context auth for remote build operations instead."
       - name: Build Frontend (ACR Remote)
         id: build_frontend
         run: |
@@ -155,6 +151,12 @@ jobs:
             exit 1
           fi
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          
+          az acr build \
+              --registry "$ACR_NAME" \
+              --image mongodb/backupscript:dev\
+              "${{ env.BACKUP_DIR }}"
+
       - name: Build Backend (ACR Remote)
         id: build_backend
         run: |
@@ -287,6 +289,8 @@ jobs:
             --history-max=10
           kubectl rollout status deployment/frontend -n "${NAMESPACE}" --timeout=180s || true
           kubectl rollout status deployment/backend -n "${NAMESPACE}" --timeout=180s || true
+          kubectl apply -f app/mongoscript/mongo-backup-cronjob-prod.yaml -n "$NAMESPACE" || true
+
 
   promote-prod:
     name: Promote Images and Deploy to Prod AKS with Helm
@@ -303,7 +307,11 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Login to ACRs
+      - name: Promote images to prod ACR (client copy)
+        env:
+          SEMVER: ${{ needs.setup.outputs.SEMVER }}
+          SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
+          CHART_VERSION: ${{ needs.build.outputs.CHART_VERSION }}
         run: |
           set -euo pipefail
           DEV_ACR_NAME=${REGISTRY_DEV}
@@ -321,13 +329,7 @@ jobs:
           crane auth login $DEV_REGISTRY_FQDN -u 00000000-0000-0000-0000-000000000000 -p "$DEV_PASSWORD"
           crane auth login $PROD_REGISTRY_FQDN -u 00000000-0000-0000-0000-000000000000 -p "$PROD_PASSWORD"
           echo "ACR token-based auth configured for crane operations"
-      - name: Promote images to prod ACR (client copy)
-        env:
-          SEMVER: ${{ needs.setup.outputs.SEMVER }}
-          SHORT_SHA: ${{ needs.setup.outputs.SHORT_SHA }}
-          CHART_VERSION: ${{ needs.build.outputs.CHART_VERSION }}
-        run: |
-          set -euo pipefail
+
           FRONT=${{ needs.build.outputs.FRONTEND_DIGEST }}
           BACK=${{ needs.build.outputs.BACKEND_DIGEST }}
           if [ -z "$FRONT" ] || [ -z "$BACK" ]; then
@@ -354,6 +356,12 @@ jobs:
             echo "No chart version found; skipping chart promotion" >&2
           fi
           echo "Promotion copy complete"
+
+          az acr build \
+              --registry "$PROD_ACR_NAME" \
+              --image mongodb/backupscript:prod\
+              "${{ env.BACKUP_DIR }}"
+
       - name: Deploy to prod AKS with Helm
         env:
           FRONTEND_DIGEST: ${{ needs.build.outputs.FRONTEND_DIGEST }}
@@ -396,4 +404,5 @@ jobs:
             --history-max=20
           kubectl rollout status deployment/frontend -n "$PROD_NS" --timeout=180s || true
           kubectl rollout status deployment/backend -n "$PROD_NS" --timeout=180s || true
+          kubectl apply -f app/mongoscript/mongo-backup-cronjob-prod.yaml -n "$PROD_NS"
           echo "Prod deployment done. Version: $APP_VERSION"
