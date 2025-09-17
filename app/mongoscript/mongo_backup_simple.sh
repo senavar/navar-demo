@@ -16,31 +16,15 @@ RETENTION=${RETENTION:-7}
 ACCOUNT=${AZURE_STORAGE_ACCOUNT:-${AZURE_STORAGE_ACCOUNT_NAME:-}}
 CONTAINER=${AZURE_STORAGE_CONTAINER:-${AZURE_BLOB_CONTAINER:-}}
 DRY_RUN=${DRY_RUN:-0}
+SECRET_PATH="/mnt/secrets-store/mongo-conn-string"
 
 if [[ -z "$MONGO_URI" ]]; then
-  # 1) Try an explicit file hint (MONGO_URI_FILE) if provided
-  if [[ -n "${MONGO_URI_FILE:-}" && -f "$MONGO_URI_FILE" ]]; then
-    MONGO_URI=$(head -n1 "$MONGO_URI_FILE" | tr -d '\r')
-    log "Loaded MONGO_URI from $MONGO_URI_FILE"
+  if [[ -f "$SECRET_PATH" ]]; then
+    MONGO_URI=$(head -n1 "$SECRET_PATH" | tr -d '\r')
+    log "Loaded MONGO_URI from $SECRET_PATH"
+  else
+    fail "MONGO_URI not set and secret file $SECRET_PATH not found"
   fi
-fi
-
-if [[ -z "$MONGO_URI" ]]; then
-  # 2) Try common CSI Secrets Store mount paths
-  for candidate in \
-    /mnt/secrets-store/mongo-conn-string \
-    /mnt/secrets-store/MONGO_URI \
-    /var/run/secrets/mongo/connectionString; do
-      if [[ -f "$candidate" ]]; then
-        MONGO_URI=$(head -n1 "$candidate" | tr -d '\r')
-        log "Loaded MONGO_URI from $candidate"
-        break
-      fi
-    done
-fi
-
-if [[ -z "$MONGO_URI" ]]; then
-  fail "MONGO_URI not set (expected via mounted secret file or MONGO_URI_FILE env var)"
 fi
 
 [[ -n "$ACCOUNT" ]] || fail "AZURE_STORAGE_ACCOUNT (or AZURE_STORAGE_ACCOUNT_NAME) required"
@@ -59,21 +43,16 @@ if [[ "$MONGO_URI" =~ ^mongodb(\+srv)?:\/\/[^/]+\/([^/?]+) ]]; then
   URI_DB="${BASH_REMATCH[2]}"
 fi
 
-EFFECTIVE_DB="$DB"
-MONGODUMP_ARGS=("--uri=$MONGO_URI")
-if [[ -n "$URI_DB" ]]; then
-  if [[ "$DB" != "$URI_DB" ]]; then
-    log "Database name mismatch: URI specifies '$URI_DB' but env wants '$DB'; using URI database."
-  fi
-  EFFECTIVE_DB="$URI_DB"
-  # Do not append --db (mongodump will use the URI DB)
+EFFECTIVE_DB="$URI_DB"
+if [[ -z "$EFFECTIVE_DB" ]]; then
+  log "Warning: URI did not contain a database segment; mongodump will include all databases."
+  BASENAME="${PREFIX}-all-${TS}"
 else
-  # URI has no explicit DB; use env/default
-  MONGODUMP_ARGS+=("--db" "$EFFECTIVE_DB")
+  BASENAME="${PREFIX}-${EFFECTIVE_DB}-${TS}"
 fi
 
-log "Dumping MongoDB '$EFFECTIVE_DB'"
-mongodump "${MONGODUMP_ARGS[@]}" --out "$WORKDIR/dump" >/dev/null
+log "Dumping MongoDB via URI (database='${EFFECTIVE_DB:-<none>}' )"
+mongodump --uri="$MONGO_URI" --out "$WORKDIR/dump" >/dev/null
 
 tar -czf "$ARCHIVE" -C "$WORKDIR/dump" .
 SIZE=$(stat -f %z "$ARCHIVE" 2>/dev/null || stat -c %s "$ARCHIVE" 2>/dev/null || echo 0)
