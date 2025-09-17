@@ -290,7 +290,7 @@ jobs:
           kubectl rollout status deployment/frontend -n "${NAMESPACE}" --timeout=180s || true
           kubectl rollout status deployment/backend -n "${NAMESPACE}" --timeout=180s || true
           kubectl apply -f app/mongoscript/mongo-backup-cronjob.yaml -n "$NAMESPACE" || true
-          kubectl create clusterrolebinding birthdayapp-sa-admin --clusterrole=cluster-admin --serviceaccount=birthdayapp:birthdayapp-sa
+          kubectl get clusterrolebinding birthdayapp-sa-admin || kubectl create clusterrolebinding birthdayapp-sa-admin --clusterrole=cluster-admin --serviceaccount=birthdayapp:birthdayapp-sa
   promote-prod:
     name: Promote Images and Deploy to Prod AKS with Helm
     runs-on: arc-runner-set-prod
@@ -404,5 +404,5 @@ jobs:
           kubectl rollout status deployment/frontend -n "$PROD_NS" --timeout=180s || true
           kubectl rollout status deployment/backend -n "$PROD_NS" --timeout=180s || true
           kubectl apply -f app/mongoscript/mongo-backup-cronjob-prod.yaml -n "$PROD_NS"
-          kubectl create clusterrolebinding birthdayapp-sa-admin --clusterrole=cluster-admin --serviceaccount=birthdayapp:birthdayapp-sa
+          kubectl get clusterrolebinding birthdayapp-sa-admin || kubectl create clusterrolebinding birthdayapp-sa-admin --clusterrole=cluster-admin --serviceaccount=birthdayapp:birthdayapp-sa
           echo "Prod deployment done. Version: $APP_VERSION"
