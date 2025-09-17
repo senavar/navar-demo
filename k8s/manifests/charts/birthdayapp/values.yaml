@@ -8,7 +8,7 @@ image:
     tag: "dev"          
     digest: ""          
     pullPolicy: IfNotPresent
-    replicas: 2
+    replicas: 1
     resources:
       requests:
         cpu: 50m
@@ -18,7 +18,7 @@ image:
         memory: 128Mi
     hpa:
       enabled: true
-      minReplicas: 2
+      minReplicas: 1
       maxReplicas: 4
       targetCPUUtilizationPercentage: 60
   backend:
@@ -26,7 +26,7 @@ image:
     tag: "dev"
     digest: ""
     pullPolicy: IfNotPresent
-    replicas: 2
+    replicas: 1
     resources:
       requests:
         cpu: 100m
@@ -36,7 +36,7 @@ image:
         memory: 512Mi
     hpa:
       enabled: true
-      minReplicas: 2
+      minReplicas: 1
       maxReplicas: 6
       targetCPUUtilizationPercentage: 70
 
