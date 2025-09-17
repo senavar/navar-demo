@@ -3,7 +3,6 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     MONGO_MAJOR=7.0 \
     MONGO_TOOLS_PKG=mongodb-database-tools \
-    MONGO_SHELL_PKG=mongosh \
     AZ_REPO_CODENAME=bookworm \
     LANG=C.UTF-8
 
@@ -32,7 +31,7 @@ RUN set -eux; \
     apt-get update -o Acquire::Retries=3; \
     apt-get dist-upgrade -y --no-install-recommends; \
     # Install runtime tools
-    apt-get install -y --no-install-recommends "${MONGO_TOOLS_PKG}" "${MONGO_SHELL_PKG}" azure-cli; \
+    apt-get install -y --no-install-recommends "${MONGO_TOOLS_PKG}" azure-cli; \
     # Remove apt cruft & build keys
     apt-get purge -y --auto-remove gnupg lsb-release; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache; \
