@@ -222,13 +222,15 @@ resource "azurerm_storage_account" "this" {
 }
 
 resource "azurerm_storage_container" "media" {
-  name               = "birthdays-images"
-  storage_account_id = azurerm_storage_account.this.id
+  name                  = "birthdays-images"
+  storage_account_id    = azurerm_storage_account.this.id
+  container_access_type = "blob"
 }
 
 resource "azurerm_storage_container" "db" {
-  name               = "db-backups"
-  storage_account_id = azurerm_storage_account.this.id
+  name                  = "db-backups"
+  storage_account_id    = azurerm_storage_account.this.id
+  container_access_type = "container"
 }
 
 # Azure Container Registry
