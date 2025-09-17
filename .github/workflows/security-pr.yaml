@@ -6,8 +6,10 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
   security-events: write
+  actions: read
+  pull-requests: write
+  id-token: write 
 
 jobs:
   security:
@@ -20,6 +22,79 @@ jobs:
       - name: Dependency Review (GitHub native)
         uses: actions/dependency-review-action@v4
       
-      - name: Run Microsoft Security DevOps
-        uses: microsoft/security-devops-action@latest
-        id: msdo
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python,javascript
+          build-mode: autobuild
+      - name: CodeQL Analyze
+        uses: github/codeql-action/analyze@v3
+      
+      - name: Trivy Repo Scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          format: sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+      
+      - name: Trivy IaC Scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: config
+          ignore-unfixed: true
+          format: sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          output: 'trivy-iac-results.sarif'
+        continue-on-error: true
+    
+      - name: Build Backend Image
+        run: docker build -t backend-pr:${{ github.sha }} app/backend
+        continue-on-error: true
+
+      - name: Build Frontend Image
+        run: docker build -t frontend-pr:${{ github.sha }} app/frontend
+        continue-on-error: true
+
+      - name: Build Mongo Script Image
+        run: docker build -t mongoscript-pr:${{ github.sha }} app/mongoscript
+        continue-on-error: true
+
+      - name: Trivy Backend Image
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+            image-ref: backend-pr:${{ github.sha }}
+            format: sarif
+            output: trivy-backend.sarif
+            ignore-unfixed: true
+            severity: CRITICAL,HIGH,MEDIUM
+        continue-on-error: true
+      - name: Trivy Frontend Image
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+            image-ref: frontend-pr:${{ github.sha }}
+            format: sarif
+            output: trivy-frontend.sarif
+            ignore-unfixed: true
+            severity: CRITICAL,HIGH,MEDIUM
+        continue-on-error: true
+
+      - name: Trivy Mongo Script Image
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+            image-ref: mongoscript-pr:${{ github.sha }}
+            format: sarif
+            output: trivy-mongoscript.sarif
+            ignore-unfixed: true
+            severity: CRITICAL,HIGH,MEDIUM
+        continue-on-error: true
+
+      - name: pip-audit
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: app/backend/requirements.txt
+        continue-on-error: true
+
+      
