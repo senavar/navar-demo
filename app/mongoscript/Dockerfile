@@ -4,14 +4,19 @@ FROM debian:stable-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl bash gnupg lsb-release mongodb-clients; \
-    curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft.gpg; \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/azure-cli.list; \
+    apt-get install -y --no-install-recommends ca-certificates curl bash gnupg lsb-release; \
+    arch="$(dpkg --print-architecture)"; \
+    release="$(lsb_release -cs)"; \
+    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb.gpg; \
+    echo "deb [ arch=${arch} signed-by=/usr/share/keyrings/mongodb.gpg ] https://repo.mongodb.org/apt/debian ${release}/mongodb-org/7.0 main" > /etc/apt/sources.list.d/mongodb-org-7.0.list; \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg; \
+    echo "deb [arch=${arch} signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ ${release} main" > /etc/apt/sources.list.d/azure-cli.list; \
     apt-get update; \
-    apt-get install -y --no-install-recommends azure-cli; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*;
+    apt-get install -y --no-install-recommends mongodb-database-tools mongosh azure-cli; \
+    apt-get purge -y --auto-remove gnupg; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache;
 
 WORKDIR /opt/backup
 
