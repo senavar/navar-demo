@@ -7,7 +7,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AZ_REPO_CODENAME=bookworm \
     LANG=C.UTF-8
 
-RUN useradd -r -u 1001 -d /opt/backup backup
+RUN set -eux; \
+    if id -u backup >/dev/null 2>&1; then \
+        echo "User 'backup' already exists"; \
+    else \
+        useradd -r -u 1001 -d /opt/backup backup; \
+    fi; \
+    mkdir -p /opt/backup; \
+    chown -R 1001:1001 /opt/backup
 
 RUN set -eux; \
     apt-get update -o Acquire::Retries=3; \
