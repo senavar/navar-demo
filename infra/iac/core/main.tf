@@ -359,6 +359,10 @@ resource "azurerm_kubernetes_cluster" "this" {
     }
   }
 
+  upgrade_override {
+    force_upgrade_enabled = "false"
+  }
+
   monitor_metrics {
     annotations_allowed = null
     labels_allowed      = null
