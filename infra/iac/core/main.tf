@@ -157,7 +157,11 @@ resource "azurerm_key_vault" "this" {
   enabled_for_deployment          = true
   enabled_for_template_deployment = true
   soft_delete_retention_days      = 7
-  tags                            = azurerm_resource_group.this.tags
+  network_acls {
+    bypass         = "AzureServices"
+    default_action = "Deny"
+  }
+  tags = azurerm_resource_group.this.tags
 }
 
 resource "azurerm_role_assignment" "akv_admin" {
@@ -382,28 +386,28 @@ resource "azurerm_kubernetes_cluster" "this" {
     dns_zone_ids = [azurerm_private_dns_zone.webapp_routing.id]
   }
 
+  microsoft_defender {
+    log_analytics_workspace_id = var.log_analytics_workspace_id
+  }
+
   tags = azurerm_resource_group.this.tags
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "user" {
-  name                        = "user"
-  kubernetes_cluster_id       = azurerm_kubernetes_cluster.this.id
-  vm_size                     = var.aks_user_vm_size
-  node_count                  = var.aks_user_node_count
-  os_sku                      = "AzureLinux"
-  vnet_subnet_id              = azurerm_subnet.aks_user.id
-  orchestrator_version        = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
-  mode                        = "User"
+  name                  = "user"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = var.aks_user_vm_size
+  node_count            = var.aks_user_node_count
+  os_sku                = "AzureLinux"
+  vnet_subnet_id        = azurerm_subnet.aks_user.id
+  orchestrator_version  = var.aks_kubernetes_version != "" ? var.aks_kubernetes_version : null
+  mode                  = "User"
+  upgrade_settings {
+    max_surge = "10%"
+  }
+
   tags                        = azurerm_resource_group.this.tags
   temporary_name_for_rotation = "userrotate"
-}
-
-resource "azurerm_log_analytics_workspace" "this" {
-  location            = var.location
-  name                = "log-${var.environment}-aks"
-  resource_group_name = azurerm_resource_group.this.name
-  sku                 = "PerGB2018"
-  tags                = var.tags
 }
 
 locals {
@@ -414,7 +418,7 @@ resource "azurerm_log_analytics_workspace_table" "this" {
   for_each = toset(local.log_analytics_tables)
 
   name                    = each.value
-  workspace_id            = azurerm_log_analytics_workspace.this.id
+  workspace_id            = var.log_analytics_workspace_id
   plan                    = "Basic"
   total_retention_in_days = 30
 }
@@ -428,7 +432,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   name                           = "amds-${var.environment}-aks-${random_string.name.result}"
   target_resource_id             = azurerm_kubernetes_cluster.this.id
   log_analytics_destination_type = "Dedicated"
-  log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
+  log_analytics_workspace_id     = var.log_analytics_workspace_id
 
   # Kubernetes API Server
   enabled_log {
