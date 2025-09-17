@@ -158,8 +158,9 @@ resource "azurerm_key_vault" "this" {
   enabled_for_template_deployment = true
   soft_delete_retention_days      = 7
   network_acls {
-    bypass         = "AzureServices"
-    default_action = "Deny"
+    bypass                     = "AzureServices"
+    default_action             = "Deny"
+    virtual_network_subnet_ids = [azurerm_subnet.aks_system.id, azurerm_subnet.aks_user.id]
   }
   tags = azurerm_resource_group.this.tags
 }
@@ -390,7 +391,8 @@ resource "azurerm_kubernetes_cluster" "this" {
     log_analytics_workspace_id = var.log_analytics_workspace_id
   }
 
-  tags = azurerm_resource_group.this.tags
+  tags       = azurerm_resource_group.this.tags
+  depends_on = [azurerm_role_assignment.aks_kms_crypto]
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "user" {
