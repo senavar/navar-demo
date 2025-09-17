@@ -5,14 +5,13 @@ from flask import Flask
 from .repository import mongo_connectivity_diagnostics
 from . import azure_blob
 from .azure_blob import blob_connectivity_diagnostics
+from werkzeug.exceptions import RequestEntityTooLarge
 
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     
     # Load configuration from config.py
-    # Make sure you have a config.py file with a Config class
-    # Example: class Config: UPLOAD_FOLDER = 'instance/uploads'
     app.config.from_object('config.Config')
 
     if test_config is None:
@@ -29,20 +28,20 @@ def create_app(test_config=None):
         pass
         
     # Ensure the upload folder exists
-    # This check is good, but make sure UPLOAD_FOLDER is defined in your config
     if app.config.get('UPLOAD_FOLDER'):
         try:
             os.makedirs(app.config['UPLOAD_FOLDER'])
         except OSError:
             pass
 
-    # REMOVED: The problematic line. The 'birthdays' module does not need initialization.
-    # from . import birthdays
-    # birthdays.init_app(app)
-
     # The api blueprint is what needs to be registered.
     from . import api
     app.register_blueprint(api.bp)
+
+    # Unified JSON response for oversized payloads caught by Flask/Werkzeug
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_large_file(e):  # pragma: no cover
+        return {"message": "File too large. Max 5MB."}, 413
 
     # --- ASYNC STARTUP DIAGNOSTICS ---
     app.logger.info("startup.phase=begin non_blocking_diagnostics=true")

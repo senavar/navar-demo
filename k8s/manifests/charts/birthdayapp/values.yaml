@@ -46,6 +46,8 @@ ingress:
   enabled: true
   className: nginx-internal
   host: "*.losnavar.com"
+  bodySize: 5m  # Maximum accepted client body size for uploads (Helm configurable)
+  annotations: {}
 
 networkPolicy:
   backend:

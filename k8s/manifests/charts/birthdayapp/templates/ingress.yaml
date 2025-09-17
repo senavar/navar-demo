@@ -4,6 +4,11 @@ kind: Ingress
 metadata:
   name: birthday-ingress
   namespace: {{ include "birthdayapp.namespace" . }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.bodySize | quote }}
+    {{- range $k, $v in .Values.ingress.annotations }}
+    {{ $k }}: {{ $v | quote }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:

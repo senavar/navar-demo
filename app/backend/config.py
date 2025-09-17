@@ -9,3 +9,6 @@ class Config:
     
     # The path to the birthdays JSON file
     BIRTHDAYS_FILE = os.path.join(INSTANCE_PATH, 'birthdays.json')
+    
+    # Maximum upload size (5 MB) to protect server resources
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024

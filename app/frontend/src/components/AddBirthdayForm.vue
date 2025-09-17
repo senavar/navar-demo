@@ -18,6 +18,7 @@ const isSubmitting = ref(false)
 const apiError = ref(null)
 const validationError = ref(null)
 const fileError = ref(null)
+const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5MB client-side limit mirrors backend
 
 // Cropper-specific state
 const showCropper = ref(false)
@@ -48,8 +49,7 @@ function handleFileChange(event) {
     fileError.value = t('errorInvalidFileType')
     return
   }
-  const maxSizeInBytes = 5 * 1024 * 1024
-  if (file.size > maxSizeInBytes) {
+  if (file.size > MAX_FILE_BYTES) {
     fileError.value = t('errorFileTooLarge', { size: '5MB' })
     return
   }
