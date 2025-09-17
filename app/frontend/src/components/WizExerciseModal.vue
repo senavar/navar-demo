@@ -8,7 +8,6 @@
       <section class="content" v-if="!error && !loading">
         <h3 class="filename">wizexercise.txt</h3>
         <pre>{{ fileText }}</pre>
-  <div class="path">{{ t('wiz.pathLabel') }}: <code>{{ containerPath }}</code></div>
       </section>
       <section v-else-if="loading" class="loading">{{ t('wiz.loading') }}</section>
       <section v-else class="error">{{ error }}</section>
@@ -32,7 +31,6 @@ const loading = ref(true)
 
 // Path inside container (Nginx serving static compiled app); source file not shipped unless copied.
 // During dev (Vite), this is resolved from /src/assets.
-  const containerPath = ref('')
 const { t } = useI18n()
 
 async function loadFile() {
@@ -43,13 +41,6 @@ async function loadFile() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const raw = await res.text()
     const lines = raw.split(/\r?\n/)
-    if (lines[0].startsWith('[container-path]')) {
-      containerPath.value = lines[0].replace('[container-path]', '').trim()
-      fileText.value = lines.slice(1).join('\n')
-    } else {
-      containerPath.value = '(no embedded path header)'
-      fileText.value = raw
-    }
   } catch (e) {
     error.value = 'Failed to load file: ' + e.message
   } finally {
