@@ -36,7 +36,7 @@ variable "subnet_cidrs" {
 variable "aks_kubernetes_version" {
   description = "AKS Kubernetes version (leave blank for default)."
   type        = string
-  default     = "1.32.0"
+  default     = "1.33.2"
 }
 
 variable "aks_system_node_count" {

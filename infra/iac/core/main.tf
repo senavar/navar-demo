@@ -235,12 +235,13 @@ resource "azurerm_storage_container" "db" {
 
 # Azure Container Registry
 resource "azurerm_container_registry" "this" {
-  name                = module.naming.container_registry.name_unique
-  resource_group_name = azurerm_resource_group.this.name
-  location            = azurerm_resource_group.this.location
-  sku                 = var.acr_sku
-  admin_enabled       = false
-  tags                = azurerm_resource_group.this.tags
+  name                          = module.naming.container_registry.name_unique
+  resource_group_name           = azurerm_resource_group.this.name
+  location                      = azurerm_resource_group.this.location
+  sku                           = var.acr_sku
+  admin_enabled                 = false
+  tags                          = azurerm_resource_group.this.tags
+  public_network_access_enabled = false
 }
 
 resource "azurerm_private_dns_zone" "acr" {

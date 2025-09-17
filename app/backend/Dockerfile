@@ -9,7 +9,11 @@ WORKDIR /app
 
 # Install dependencies first for better layer caching
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+	&& pip install --no-cache-dir -r requirements.txt \
+	&& python -c "import setuptools,sys; from pkg_resources import parse_version;\
+v=parse_version(setuptools.__version__);\
+assert v>=parse_version('78.1.1'), f'Setuptools {setuptools.__version__} < 78.1.1 (CVE-2024-6345 / CVE-2025-47273 not remediated)'"
 
 # Copy application source afterward
 COPY . .
