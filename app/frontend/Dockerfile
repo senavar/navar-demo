@@ -13,10 +13,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 RUN adduser -D -H -u 10001 webuser \
 	&& rm -rf /usr/share/nginx/html/*
 COPY --from=build /app/dist /usr/share/nginx/html
-RUN if [ -f /usr/share/nginx/html/wizexercise.txt ]; then \
-			echo "[container-path]/usr/share/nginx/html/wizexercise.txt" | cat - /usr/share/nginx/html/wizexercise.txt > /tmp/wiz && mv /tmp/wiz /usr/share/nginx/html/wizexercise.txt; \
-		fi \
-	&& mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp \
+RUN mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp \
 	&& mkdir -p /var/log/nginx \
 	&& chown -R 10001:0 /tmp /var/log/nginx /usr/share/nginx/html
 USER webuser
