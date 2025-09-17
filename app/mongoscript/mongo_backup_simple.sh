@@ -4,7 +4,6 @@ set -euo pipefail
 
 log() { echo "[mongo-backup-simple] $*" >&2; }
 fail() { log "ERROR: $*"; exit 1; }
-
 require() { command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"; }
 require mongodump
 require az
@@ -18,13 +17,9 @@ CONTAINER=${AZURE_STORAGE_CONTAINER:-${AZURE_BLOB_CONTAINER:-}}
 DRY_RUN=${DRY_RUN:-0}
 SECRET_PATH="/mnt/secrets-store/mongo-conn-string"
 
-if [[ -z "$MONGO_URI" ]]; then
-  if [[ -f "$SECRET_PATH" ]]; then
-    MONGO_URI=$(head -n1 "$SECRET_PATH" | tr -d '\r')
-    log "Loaded MONGO_URI from $SECRET_PATH"
-  else
-    fail "MONGO_URI not set and secret file $SECRET_PATH not found"
-  fi
+if [[ -z "$MONGO_URI" ]] && [[ -f "$SECRET_PATH" ]]; then
+  MONGO_URI=$(head -n1 "$SECRET_PATH" | tr -d '\r')
+  log "Loaded MONGO_URI from $SECRET_PATH"
 fi
 
 [[ -n "$ACCOUNT" ]] || fail "AZURE_STORAGE_ACCOUNT (or AZURE_STORAGE_ACCOUNT_NAME) required"
@@ -52,9 +47,11 @@ else
 fi
 
 log "Dumping MongoDB via URI (database='${EFFECTIVE_DB:-<none>}' )"
-mongodump --uri="$MONGO_URI" --out "$WORKDIR/dump" >/dev/null
+DUMPDIR="$WORKDIR/dump"
+mkdir -p "$DUMPDIR"
+mongodump --uri="$MONGO_URI" --out "$DUMPDIR" >/dev/null
 
-tar -czf "$ARCHIVE" -C "$WORKDIR/dump" .
+tar -czf "$ARCHIVE" -C "$DUMPDIR" .
 SIZE=$(stat -f %z "$ARCHIVE" 2>/dev/null || stat -c %s "$ARCHIVE" 2>/dev/null || echo 0)
 log "Archive created: $ARCHIVE (${SIZE} bytes)"
 
