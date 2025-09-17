@@ -68,8 +68,26 @@ ARCHIVE="${WORKDIR}/${BASENAME}.tar.gz"
 cleanup() { rm -rf "$WORKDIR" || true; }
 trap cleanup EXIT
 
-log "Dumping MongoDB '$DB'"
-mongodump --uri="$MONGO_URI" --db "$DB" --out "$WORKDIR/dump" >/dev/null
+URI_DB=""
+if [[ "$MONGO_URI" =~ ^mongodb(\+srv)?:\/\/[^/]+\/([^/?]+) ]]; then
+  URI_DB="${BASH_REMATCH[2]}"
+fi
+
+EFFECTIVE_DB="$DB"
+MONGODUMP_ARGS=("--uri=$MONGO_URI")
+if [[ -n "$URI_DB" ]]; then
+  if [[ "$DB" != "$URI_DB" ]]; then
+    log "Database name mismatch: URI specifies '$URI_DB' but env wants '$DB'; using URI database."
+  fi
+  EFFECTIVE_DB="$URI_DB"
+  # Do not append --db (mongodump will use the URI DB)
+else
+  # URI has no explicit DB; use env/default
+  MONGODUMP_ARGS+=("--db" "$EFFECTIVE_DB")
+fi
+
+log "Dumping MongoDB '$EFFECTIVE_DB'"
+mongodump "${MONGODUMP_ARGS[@]}" --out "$WORKDIR/dump" >/dev/null
 
 tar -czf "$ARCHIVE" -C "$WORKDIR/dump" .
 SIZE=$(stat -f %z "$ARCHIVE" 2>/dev/null || stat -c %s "$ARCHIVE" 2>/dev/null || echo 0)
