@@ -60,6 +60,9 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
+log "Logging in to Azure ..."
+az login --federated-token "$(cat $AZURE_FEDERATED_TOKEN_FILE)" --service-principal -u $AZURE_CLIENT_ID -t $AZURE_TENANT_ID
+
 log "Uploading to Azure Blob ..."
 az storage blob upload \
   --account-name "$ACCOUNT" \
