@@ -17,8 +17,14 @@ CONTAINER=${AZURE_STORAGE_CONTAINER:-${AZURE_BLOB_CONTAINER:-}}
 DRY_RUN=${DRY_RUN:-0}
 SECRET_PATH="/mnt/secrets-store/mongo-conn-string"
 
-# Ensure HOME is writable for azure cli config; nonroot user
+# Ensure HOME is writable for azure cli config; nonroot user.
+# If HOME is unset or empty, default to /opt/backup. If HOME is '/' or not writable, fallback to a temp dir under /tmp.
 : "${HOME:=/opt/backup}"
+if [[ "$HOME" == "/" || ! -w "$HOME" ]]; then
+  TMP_HOME=$(mktemp -d /tmp/azhome.XXXXXX 2>/dev/null || echo /tmp/azhome-fallback)
+  mkdir -p "$TMP_HOME"
+  HOME="$TMP_HOME"
+fi
 export HOME
 export AZURE_CONFIG_DIR="$HOME/.azure"
 mkdir -p "$AZURE_CONFIG_DIR"
