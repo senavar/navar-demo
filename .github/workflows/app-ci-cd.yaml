@@ -289,7 +289,7 @@ jobs:
             --history-max=10
           kubectl rollout status deployment/frontend -n "${NAMESPACE}" --timeout=180s || true
           kubectl rollout status deployment/backend -n "${NAMESPACE}" --timeout=180s || true
-          kubectl apply -f app/mongoscript/mongo-backup-cronjob-prod.yaml -n "$NAMESPACE" || true
+          kubectl apply -f app/mongoscript/mongo-backup-cronjob.yaml -n "$NAMESPACE" || true
 
 
   promote-prod:

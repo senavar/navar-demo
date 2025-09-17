@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: mongo-backup
-  namespace: birthdayapp-prod
+  namespace: birthdayapp
   labels:
     app: mongo-backup
 spec:
