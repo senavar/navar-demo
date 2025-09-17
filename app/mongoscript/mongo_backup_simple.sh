@@ -60,12 +60,6 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-# Ensure container exists (idempotent)
-az storage container create \
-  --name "$CONTAINER" \
-  --account-name "$ACCOUNT" \
-  >/dev/null || true
-
 log "Uploading to Azure Blob ..."
 az storage blob upload \
   --account-name "$ACCOUNT" \
