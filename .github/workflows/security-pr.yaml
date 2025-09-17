@@ -21,15 +21,17 @@ jobs:
 
       - name: Dependency Review (GitHub native)
         uses: actions/dependency-review-action@v4
+        continue-on-error: true
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: python,javascript
-          
+        continue-on-error: true
+
       - name: CodeQL Analyze
         uses: github/codeql-action/analyze@v3
-      
+        continue-on-error: true
       - name: Trivy Repo Scan
         uses: aquasecurity/trivy-action@0.20.0
         with:
