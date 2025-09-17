@@ -34,14 +34,13 @@ spec:
         - ports:
             - port: "27017"
               protocol: TCP
-    # Allow egress to Azure AD login endpoint for Workload Identity token exchange
     - toFQDNs:
         - matchName: login.microsoftonline.com
       toPorts:
         - ports:
             - port: "443"
               protocol: TCP
-      {{- if .Values.networkPolicy.backend.azureExtraFQDNs }}
+    {{- if .Values.networkPolicy.backend.azureExtraFQDNs }}
     - toFQDNs:
         {{- range .Values.networkPolicy.backend.azureExtraFQDNs }}
         - matchName: {{ . | quote }}
@@ -50,5 +49,43 @@ spec:
         - ports:
             - port: "443"
               protocol: TCP
+    {{- end }}
+    {{- if and .Values.azureBlob.enabled .Values.networkPolicy.backend.autoAddStorageAccountFQDN .Values.azureBlob.accountName }}
+    - toFQDNs:
+        - matchName: {{ printf "%s.blob.core.windows.net" .Values.azureBlob.accountName | quote }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- if .Values.networkPolicy.backend.azureServiceFQDNPatterns }}
+    - toFQDNs:
+        {{- range .Values.networkPolicy.backend.azureServiceFQDNPatterns }}
+        - matchPattern: {{ . | quote }}
+        {{- end }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- if .Values.networkPolicy.backend.privateEndpointCIDRs }}
+    - toCIDR:
+        {{- range .Values.networkPolicy.backend.privateEndpointCIDRs }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- $ports := .Values.networkPolicy.backend.privateEndpointPorts }}
+      {{- if or (not $ports) (eq (len $ports) 0) }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+      {{- else }}
+      toPorts:
+        - ports:
+            {{- range $ports }}
+            - port: "{{ . }}"
+              protocol: TCP
+            {{- end }}
       {{- end }}
+    {{- end }}
 {{- end }}

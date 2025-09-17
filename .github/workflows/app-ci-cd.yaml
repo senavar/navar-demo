@@ -392,6 +392,7 @@ jobs:
             --set azureBlob.container=${{ secrets.AZURE_BLOB_CONTAINER_NAME_PROD }} \
             --set serviceAccountName=birthdayapp-sa \
             --set appVersionOverride="$APP_VERSION" \
+            --set networkPolicy.backend.mongoCIDR="10.20.3.4/32"
             --history-max=20
           kubectl rollout status deployment/frontend -n "$PROD_NS" --timeout=180s || true
           kubectl rollout status deployment/backend -n "$PROD_NS" --timeout=180s || true

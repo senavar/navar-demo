@@ -53,6 +53,14 @@ networkPolicy:
     mongoCIDR: 10.10.3.4/32
     # Additional Azure FQDNs (besides login.microsoftonline.com automatically allowed) that backend needs (e.g. management.azure.com, storage account endpoints)
     azureExtraFQDNs: []
+    # List of private endpoint subnet CIDRs the backend must reach (e.g. storage account private endpoints)
+    privateEndpointCIDRs: []
+    privateEndpointPorts: []
+    # Azure service FQDN patterns (converted to toFQDNs matchPattern). Examples:
+    # - "*.blob.core.windows.net"
+    azureServiceFQDNPatterns: []
+    # Automatically add storage account FQDN (accountName.blob.core.windows.net) if azureBlob.enabled
+    autoAddStorageAccountFQDN: true
 
 podSecurityContext:
   runAsNonRoot: true
