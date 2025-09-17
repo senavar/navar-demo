@@ -47,12 +47,29 @@ def delete_picture_file(filename):
 def get_birthdays():
     """Retrieves all birthdays and adds full URLs for profile pictures."""
     birthdays_list = get_all_birthdays()
+    # Always emit a profile_picture_url field (even if None) to simplify frontend logic.
+    azure_active = azure_blob.is_configured()
     for b in birthdays_list:
         pic = b.get('profile_picture')
+        storage_backend = b.get('storage_backend')  # may be missing for legacy records
+        b['profile_picture_url'] = None
         if pic:
-            if azure_blob.is_configured():
-                b['profile_picture_url'] = azure_blob.get_blob_url(pic)
+            use_azure = False
+            if storage_backend == 'azure':
+                # Only build an Azure URL if Azure currently configured; otherwise leave None so frontend shows fallback
+                use_azure = azure_active
+            elif storage_backend == 'local':
+                use_azure = False
             else:
+                # Legacy record (no storage_backend). Assume current environment.
+                use_azure = azure_active
+            if use_azure:
+                url = azure_blob.get_blob_url(pic)
+                # If somehow url generation failed (returns None) leave as None.
+                if url:
+                    b['profile_picture_url'] = url
+            else:
+                # Local file path fallback
                 b['profile_picture_url'] = url_for('api.uploaded_file', filename=pic, _external=True)
     return jsonify(birthdays_list)
 
@@ -177,10 +194,20 @@ def create_birthday():
         "year": year,
         "month": month,
         "day": day,
-        "profile_picture": unique_filename
+        "profile_picture": unique_filename,
+        # Track where the file lives so future GETs produce the right URL even if env changes.
+        "storage_backend": ("azure" if (unique_filename and azure_blob.is_configured()) else ("local" if unique_filename else None))
     }
 
     added = add_new_birthday(new_person)
+    # Augment response with profile_picture_url so frontend can optimistically display without refetch.
+    if added.get("profile_picture"):
+        if added.get("storage_backend") == 'azure' and azure_blob.is_configured():
+            added['profile_picture_url'] = azure_blob.get_blob_url(added['profile_picture'])
+        else:
+            added['profile_picture_url'] = url_for('api.uploaded_file', filename=added['profile_picture'], _external=True)
+    else:
+        added['profile_picture_url'] = None
     return jsonify({"message": "Birthday added successfully", "person": added}), 201
 
 @bp.route('/birthdays/<int:id>', methods=['PUT'])
@@ -216,15 +243,28 @@ def update_birthday(id):
                 if not blob_name:
                     return jsonify({"message": "Image upload failed"}), 500
                 update_data['profile_picture'] = blob_name
+                update_data['storage_backend'] = 'azure'
             else:
                 upload_folder = os.path.join(current_app.instance_path, 'uploads')
                 os.makedirs(upload_folder, exist_ok=True)
                 file.save(os.path.join(upload_folder, unique_filename))
                 update_data['profile_picture'] = unique_filename
+                update_data['storage_backend'] = 'local'
         elif file and file.filename != '':
             return jsonify({"message": "Invalid file type"}), 400
 
     updated_person = update_birthday_in_db(id, update_data)
+    # Provide updated URL for convenience
+    if updated_person:
+        pic = updated_person.get('profile_picture')
+        backend = updated_person.get('storage_backend')
+        if pic:
+            if backend == 'azure' and azure_blob.is_configured():
+                updated_person['profile_picture_url'] = azure_blob.get_blob_url(pic)
+            else:
+                updated_person['profile_picture_url'] = url_for('api.uploaded_file', filename=pic, _external=True)
+        else:
+            updated_person['profile_picture_url'] = None
     return jsonify(updated_person)
 
 @bp.route('/birthdays/<int:id>', methods=['DELETE'])
