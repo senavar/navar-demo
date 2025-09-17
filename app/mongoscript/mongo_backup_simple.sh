@@ -40,21 +40,7 @@ if [[ -z "$MONGO_URI" ]]; then
 fi
 
 if [[ -z "$MONGO_URI" ]]; then
-  # 3) Build from discrete host/user/pass env vars if present
-  if [[ -n "${MONGO_HOST:-}" ]]; then
-    MONGO_PORT=${MONGO_PORT:-27017}
-    AUTH_SEG=""
-    if [[ -n "${MONGO_USER:-}" ]]; then
-      AUTH_SEG="${MONGO_USER}"
-      if [[ -n "${MONGO_PASS:-}" ]]; then
-        AUTH_SEG+=":${MONGO_PASS}"
-      fi
-      AUTH_SEG+="@"
-    fi
-    MONGO_URI="mongodb://${AUTH_SEG}${MONGO_HOST}:${MONGO_PORT}/${DB}?authSource=admin"
-  else
-    fail "MONGO_URI not set and no credential file or MONGO_HOST provided"
-  fi
+  fail "MONGO_URI not set (expected via mounted secret file or MONGO_URI_FILE env var)"
 fi
 
 [[ -n "$ACCOUNT" ]] || fail "AZURE_STORAGE_ACCOUNT (or AZURE_STORAGE_ACCOUNT_NAME) required"
