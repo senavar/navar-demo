@@ -162,5 +162,5 @@ variable "blob_container_name" {
 variable "log_analytics_workspace_id" {
   description = "Log Analytics Workspace ID for monitoring and Microsoft Defender."
   type        = string
-  default     = "/subscriptions/1e40f54e-a0a4-422d-9b45-a51c554c2636/resourcegroups/DefaultResourceGroup-CUS/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-1e40f54e-a0a4-422d-9b45-a51c554c2636-CUS"
+  default     = "/subscriptions/1e40f54e-a0a4-422d-9b45-a51c554c2636/resourceGroups/defaultresourcegroup-cus/providers/microsoft.operationalinsights/workspaces/defaultworkspace-1e40f54e-a0a4-422d-9b45-a51c554c2636-cus"
 }
