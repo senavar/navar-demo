@@ -82,6 +82,7 @@ az storage blob upload \
   --name "${BASENAME}.tar.gz" \
   --file "$ARCHIVE" \
   --content-type application/gzip \
+  --auth-mode login \
   --only-show-errors \
   --no-progress >/dev/null
 log "Uploaded blob: ${BASENAME}.tar.gz"
@@ -92,6 +93,7 @@ if [[ "$RETENTION" =~ ^[0-9]+$ ]] && (( RETENTION > 0 )); then
   mapfile -t MATCHING < <(az storage blob list \
     --account-name "$ACCOUNT" \
     --container-name "$CONTAINER" \
+    --auth-mode login \
     --prefix "${PREFIX}-${DB}-" \
     --query '[].{name:name, time:properties.lastModified}' -o tsv | sort -k2r)
   COUNT=0
@@ -100,7 +102,7 @@ if [[ "$RETENTION" =~ ^[0-9]+$ ]] && (( RETENTION > 0 )); then
     (( COUNT++ ))
     if (( COUNT > RETENTION )); then
       log "Deleting old blob: $name"
-      az storage blob delete --account-name "$ACCOUNT" --container-name "$CONTAINER" --name "$name" --only-show-errors >/dev/null || log "Warn: failed to delete $name"
+      az storage blob delete --account-name "$ACCOUNT" --container-name "$CONTAINER" --name "$name" --auth-mode login --only-show-errors >/dev/null || log "Warn: failed to delete $name"
     fi
   done
 fi
