@@ -622,7 +622,7 @@ resource "azurerm_network_security_group" "mongodb" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "27017"
-    source_address_prefix      = [azurerm_subnet.aks_system.address_prefixes[0], azurerm_subnet.aks_user.address_prefixes[0]]
+    source_address_prefixes    = [azurerm_subnet.aks_system.address_prefixes[0], azurerm_subnet.aks_user.address_prefixes[0]]
     destination_address_prefix = "*"
   }
 }
