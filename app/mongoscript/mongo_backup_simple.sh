@@ -17,6 +17,12 @@ CONTAINER=${AZURE_STORAGE_CONTAINER:-${AZURE_BLOB_CONTAINER:-}}
 DRY_RUN=${DRY_RUN:-0}
 SECRET_PATH="/mnt/secrets-store/mongo-conn-string"
 
+# Ensure HOME is writable for azure cli config; nonroot user
+: "${HOME:=/opt/backup}"
+export HOME
+export AZURE_CONFIG_DIR="$HOME/.azure"
+mkdir -p "$AZURE_CONFIG_DIR"
+
 if [[ -z "$MONGO_URI" ]] && [[ -f "$SECRET_PATH" ]]; then
   MONGO_URI=$(head -n1 "$SECRET_PATH" | tr -d '\r')
   log "Loaded MONGO_URI from $SECRET_PATH"
