@@ -9,6 +9,7 @@ docs
 *.vscode/
 
 scrap/
+interview/
 
 # .tfstate files
 *.tfstate

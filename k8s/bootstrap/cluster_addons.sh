@@ -25,12 +25,14 @@ if ! helm ls -n "$KYVERNO_NS" | grep -q "kyverno"; then
   echo "Installing Kyverno"
   helm repo add kyverno https://kyverno.github.io/kyverno/ 
   helm repo update
-  helm install kyverno kyverno/kyverno -n "$KYVERNO_NS" \
+  helm install kyverno kyverno/kyverno -n "kyverno" \
     --set admissionController.replicas=2 \
     --set backgroundController.replicas=1 \
-    --set cleanupController.replicas=1
+    --set cleanupController.replicas=1 
     
-  helm install kyverno-policies kyverno/kyverno-policies -n kyverno
+  helm install kyverno-policies kyverno/kyverno-policies -n kyverno \
+    --set podSecurityStandard='baseline' \
+    --set validationFailureAction='Enforce'
 else
   echo "Kyverno already installed"
 fi
