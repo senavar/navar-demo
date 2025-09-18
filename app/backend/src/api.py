@@ -22,6 +22,15 @@ from . import azure_blob
 # --- BLUEPRINT SETUP ---
 bp = Blueprint('api', __name__, url_prefix='/api')
 
+DEMO_INSECURE = os.getenv('DEMO_INSECURE') == '1'
+
+# Hardcoded secret pattern (will be flagged by secret scanners / Semgrep)
+if DEMO_INSECURE:
+    HARDCODED_API_KEY = "sk_live_DEMO1234567890INSECURE"  # demo: hardcoded secret
+else:
+    HARDCODED_API_KEY = None
+
+
 # --- HELPER FUNCTIONS ---
 def allowed_file(filename):
     """Checks if the file extension is allowed."""
@@ -86,6 +95,54 @@ def storage_status():
     # Add blob status too
     status["blob_configured"] = azure_blob.is_configured()
     return jsonify(status)
+
+if DEMO_INSECURE:
+    @bp.route('/insecure/exec', methods=['POST'])
+    def insecure_exec():
+        """DEMO ONLY: Unsafely executes python code from request JSON.
+        Expected finding: Code injection (eval).
+        Enable by setting DEMO_INSECURE=1 in the environment.
+        """
+        data = request.get_json(silent=True) or {}
+        code = data.get('code', '')
+        try:
+            # Intentional vulnerability for demo
+            result = eval(code)  # noqa: S307 (bandit) / intentional
+            return jsonify({"result": result, "warning": "INSECURE_ENDPOINT_ENABLED"})
+        except Exception as e:
+            return jsonify({"error": str(e), "warning": "INSECURE_ENDPOINT_ENABLED"}), 400
+
+    @bp.route('/insecure/shell', methods=['POST'])
+    def insecure_shell():
+        """DEMO ONLY: Executes shell command unsafely.
+        Expected finding: Command injection / subprocess shell usage.
+        """
+        import subprocess  # local import for clarity
+        data = request.get_json(silent=True) or {}
+        cmd = data.get('cmd', 'echo demo')
+        # Intentional vulnerability
+        completed = subprocess.run(cmd, shell=True, capture_output=True, text=True)  # noqa: S602
+        return jsonify({
+            "cmd": cmd,
+            "rc": completed.returncode,
+            "stdout": completed.stdout[-500:],
+            "stderr": completed.stderr[-500:],
+            "warning": "INSECURE_ENDPOINT_ENABLED"
+        })
+
+    @bp.route('/insecure/readfile', methods=['GET'])
+    def insecure_readfile():
+        """DEMO ONLY: Path traversal style file read.
+        Expected finding: Possible directory traversal / arbitrary file read.
+        """
+        target = request.args.get('path', '/etc/hosts')
+        try:
+            with open(target, 'r', encoding='utf-8', errors='ignore') as f:  # noqa: PTH123 Ssec
+                content = f.read(2000)
+            return jsonify({"path": target, "preview": content, "warning": "INSECURE_ENDPOINT_ENABLED"})
+        except Exception as e:
+            return jsonify({"error": str(e), "warning": "INSECURE_ENDPOINT_ENABLED"}), 400
+
 
 @bp.route('/birthdays', methods=['POST'])
 def create_birthday():
