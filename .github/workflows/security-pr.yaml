@@ -46,6 +46,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: trivy-results.sarif
+          category: repo-scan
         continue-on-error: true
       
       - name: Trivy IaC Scan
@@ -62,6 +63,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: trivy-iac-results.sarif
+          category: iac-scan
         continue-on-error: true
 
       - name: Build Backend Image
@@ -90,6 +92,9 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-backend.sarif
+          category: backend-container-scan
+        continue-on-error: true
+
       - name: Trivy Frontend Image
         uses: aquasecurity/trivy-action@0.20.0
         with:
@@ -104,6 +109,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-frontend.sarif
+          category: frontend-container-scan
+        continue-on-error: true
 
       - name: Trivy Mongo Script Image
         uses: aquasecurity/trivy-action@0.20.0
@@ -114,10 +121,9 @@ jobs:
             ignore-unfixed: true
             severity: CRITICAL,HIGH,MEDIUM
         continue-on-error: true
-
       - name: Upload Trivy Mongo Script Container Scan
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-mongoscript.sarif
-
-      
+          category: mongoscript-container-scan
+        continue-on-error: true
