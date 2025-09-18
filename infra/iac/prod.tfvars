@@ -23,6 +23,6 @@ linux_image = {
   sku: "hardened-ubuntu-18-04-lts-freesku"
   version: "latest"
 }
-app_service_account_namespace = "navarapp"
+app_service_account_namespace = "birthdayapp"
 wi_service_account_name       = "birthdayapp-sa"
 arc_github_config_url         = "https://github.com/senavar/navar-demo"
