@@ -22,11 +22,16 @@ terraform {
       version = ">= 2.0.0"
     }
   }
-  backend "azurerm" {}
+  backend "azurerm" {
+    resource_group_name  = "rg-navar-terraform"
+    storage_account_name = "sanavartf"
+    container_name       = "tfstate"
+    key                  = "navar-demo-infra.tfstate" 
+  }
 }
 provider "azurerm" {
   features {}
-  subscription_id = "1e40f54e-a0a4-422d-9b45-a51c554c2636"
+  subscription_id = "06d14cf1-6eb8-4010-a37c-7db78b17c334"
 }
 
 provider "azuread" {}
@@ -51,6 +56,10 @@ module "core" {
   linux_image                     = var.linux_image
   admin_source_ips                = var.admin_source_ips
   api_server_authorized_ip_ranges = var.api_server_authorized_ip_ranges
+  tags = {
+    Owner       = "Sergio Navar"
+    Project     = "Navar Demo"
+  }
 }
 
 # Kubernetes add-ons module
@@ -85,6 +94,10 @@ module "appgw" {
   node_resource_group = module.core.node_resource_group
   key_vault_id        = module.core.key_vault_id
   appgw_uami_id       = module.k8s_addons.workload_identity_id
+  tags = {
+    Owner       = "Sergio Navar"
+    Project     = "Navar Demo"
+  }
 }
 
 # Aggregated Outputs

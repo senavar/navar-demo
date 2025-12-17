@@ -34,25 +34,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  scan:
-    name: Microsoft Defender for Cloud - Code Scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      actions: read
-      security-events: write
-    steps:
-    - name: Checkout Code to Scan
-      uses: actions/checkout@v3
-    - name: Run Microsoft Security DevOps
-      uses: microsoft/security-devops-action@latest
-      id: msdo
-    - name: Upload alerts to Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: ${{ steps.msdo.outputs.sarifFile }}
-
   terraform-dev:
     name: 'Terraform Infra for Dev'
     runs-on: ubuntu-latest
@@ -83,20 +64,20 @@ jobs:
         run: terraform plan -var-file=dev.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Dev)
         run: terraform apply -auto-approve tfplan-core
-      - name: Import PFX into Key Vault (creates new version if exists)
-        env:
-          APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
-          APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
-        run: |
-          set -e
-          KV_NAME="kv-navarlab-dev"
-          printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
-          if [ -n "${APPGW_PFX_PASSWORD}" ]; then
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
-          else
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
-          fi
-          rm -f cert.pfx
+      # - name: Import PFX into Key Vault (creates new version if exists)
+      #   env:
+      #     APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
+      #     APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
+      #   run: |
+      #     set -e
+      #     KV_NAME="kv-navarlab-dev"
+      #     printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
+      #     if [ -n "${APPGW_PFX_PASSWORD}" ]; then
+      #       az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
+      #     else
+      #       az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
+      #     fi
+      #     rm -f cert.pfx
       - name: Plan Full (Dev)
         id: plan-full
         run: |
@@ -156,20 +137,20 @@ jobs:
         run: terraform plan -var-file=prod.tfvars -target="module.core" -out=tfplan-core -input=false
       - name: Apply Core (Prod)
         run: terraform apply -auto-approve tfplan-core
-      - name: Import PFX into Key Vault (creates new version if exists)
-        env:
-          APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
-          APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
-        run: |
-          set -e
-          KV_NAME="kv-navarlab-prod"
-          printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
-          if [ -n "${APPGW_PFX_PASSWORD}" ]; then
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
-          else
-            az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
-          fi
-          rm -f cert.pfx
+      # - name: Import PFX into Key Vault (creates new version if exists)
+      #   env:
+      #     APPGW_PFX_BASE64: ${{ secrets.APPGW_PFX_BASE64 }}
+      #     APPGW_PFX_PASSWORD: ${{ secrets.APPGW_PFX_PASSWORD }}
+      #   run: |
+      #     set -e
+      #     KV_NAME="kv-navarlab-prod"
+      #     printf %s "$APPGW_PFX_BASE64" | base64 -d > cert.pfx
+      #     if [ -n "${APPGW_PFX_PASSWORD}" ]; then
+      #       az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx --password "${APPGW_PFX_PASSWORD}" -o none --only-show-errors > /dev/null
+      #     else
+      #       az keyvault certificate import --vault-name "$KV_NAME" -n APP-TLS-CERT -f cert.pfx -o none --only-show-errors > /dev/null
+      #     fi
+      #     rm -f cert.pfx
       - name: Plan Full (Prod)
         id: plan-full
         run: |

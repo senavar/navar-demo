@@ -9,10 +9,6 @@ data "azurerm_lb" "internal_lb" {
   resource_group_name = var.node_resource_group
 }
 
-data "azurerm_key_vault_secret" "appgw_tls" {
-  name         = var.certificate_secret_name
-  key_vault_id = var.key_vault_id
-}
 resource "azurerm_public_ip" "appgw" {
   name                = module.naming.public_ip.name
   resource_group_name = var.resource_group_name
@@ -101,6 +97,8 @@ resource "azurerm_application_gateway" "this" {
     frontend_port_name             = "port80"
     protocol                       = "Http"
   }
+  
+  /*
   ssl_certificate {
     name                = "primary-tls"
     key_vault_secret_id = data.azurerm_key_vault_secret.appgw_tls.id
@@ -133,11 +131,18 @@ resource "azurerm_application_gateway" "this" {
     priority                    = 10
   }
 
-  # Primary HTTPS routing rule
+  data "azurerm_key_vault_secret" "appgw_tls" {
+  name         = var.certificate_secret_name
+  key_vault_id = var.key_vault_id
+  }
+
+*/
+
+# Primary routing rule
   request_routing_rule {
-    name                       = "rule-https"
+    name                       = "rule-http"
     rule_type                  = "Basic"
-    http_listener_name         = "listener-https"
+    http_listener_name         = "listener-http"
     backend_address_pool_name  = "aks-ingress-pool"
     backend_http_settings_name = "http-settings"
     priority                   = 1

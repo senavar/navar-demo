@@ -21,7 +21,7 @@ module "naming" {
 module "naming_mongodb" {
   source  = "Azure/naming/azurerm"
   version = "~> 0.4.0"
-  suffix  = [var.environment, "mongo"]
+  suffix  = [var.environment, "navarmongo"]
 }
 
 data "azurerm_client_config" "current" {}
@@ -147,7 +147,7 @@ resource "azurerm_subnet_network_security_group_association" "ops" {
 
 # Key Vault
 resource "azurerm_key_vault" "this" {
-  name                            = "kv-navarlab-${var.environment}"
+  name                            = "kv-navar-${var.environment}"
   location                        = azurerm_resource_group.this.location
   resource_group_name             = azurerm_resource_group.this.name
   tenant_id                       = data.azurerm_client_config.current.tenant_id
@@ -320,12 +320,12 @@ resource "azurerm_kubernetes_cluster" "this" {
   workload_identity_enabled = true
   local_account_disabled    = true
   # Apply IP allow list only if user provided ranges (empty list leaves API open to Internet).
-  #dynamic "api_server_access_profile" {
+  # dynamic "api_server_access_profile" {
   #  for_each = length(var.api_server_authorized_ip_ranges) == 0 ? [] : [1]
   #  content {
   #    authorized_ip_ranges = var.api_server_authorized_ip_ranges
   #  }
-  #}
+  # }
 
   # Etcd secret encryption via Azure Key Vault KMS (customer-managed key)
   key_management_service {
@@ -358,10 +358,6 @@ resource "azurerm_kubernetes_cluster" "this" {
     }
   }
 
-  upgrade_override {
-    force_upgrade_enabled = "false"
-  }
-
   monitor_metrics {
     annotations_allowed = null
     labels_allowed      = null
@@ -389,7 +385,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   microsoft_defender {
-    log_analytics_workspace_id = var.log_analytics_workspace_id
+    log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
   }
 
   tags       = azurerm_resource_group.this.tags
@@ -413,6 +409,15 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
   temporary_name_for_rotation = "userrotate"
 }
 
+resource "azurerm_log_analytics_workspace" "this" {
+  name                = "law-navar-${var.environment}"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "PerGB2018"
+  retention_in_days  = 30
+  tags                = azurerm_resource_group.this.tags
+} 
+
 locals {
   log_analytics_tables = ["AKSAudit", "AKSAuditAdmin", "AKSControlPlane", "ContainerLogV2"]
 }
@@ -421,7 +426,7 @@ resource "azurerm_log_analytics_workspace_table" "this" {
   for_each = toset(local.log_analytics_tables)
 
   name                    = each.value
-  workspace_id            = var.log_analytics_workspace_id
+  workspace_id            = azurerm_log_analytics_workspace.this.id
   plan                    = "Basic"
   total_retention_in_days = 30
 }
@@ -435,7 +440,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   name                           = "amds-${var.environment}-aks-${random_string.name.result}"
   target_resource_id             = azurerm_kubernetes_cluster.this.id
   log_analytics_destination_type = "Dedicated"
-  log_analytics_workspace_id     = var.log_analytics_workspace_id
+  log_analytics_workspace_id     = azurerm_log_analytics_workspace.this.id
 
   # Kubernetes API Server
   enabled_log {

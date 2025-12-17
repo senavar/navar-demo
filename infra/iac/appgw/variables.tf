@@ -29,6 +29,7 @@ variable "tags" {
   description = "Common resource tags"
   default     = {}
 }
+
 variable "node_resource_group" {
   type        = string
   description = "The node resource group of the AKS cluster"
