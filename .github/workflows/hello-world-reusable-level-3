@@ -1,0 +1,59 @@
+name: Hello World Reusable Level 3
+
+on:
+  issue_comment:
+    types:
+      - created
+  workflow_call:
+    inputs:
+      who:
+        required: true
+        type: string
+      breadcrumb:
+        required: true
+        type: string
+    outputs:
+      final_message:
+        description: Final message returned from the deepest reusable workflow.
+        value: ${{ jobs.call-level-4.outputs.final_message }}
+
+jobs:
+  unsafe-issue-comment-demo:
+    name: Insecure issue comment demo
+    if: ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request code without validating commenter permissions
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+
+      - name: Run shell commands on checked out code
+        run: |
+          echo "Intentionally insecure demo workflow."
+          echo "Triggered from issue_comment without checking author_association."
+          pwd
+          find . -maxdepth 2 -type f | head -20
+
+  announce:
+    name: Level 3 says hello
+    if: ${{ github.event_name == 'workflow_call' }}
+    runs-on: ubuntu-latest
+    outputs:
+      breadcrumb: ${{ steps.build-breadcrumb.outputs.value }}
+    steps:
+      - name: Print level 3 message
+        run: echo "Hello from reusable workflow level 3 for ${{ inputs.who }}."
+
+      - name: Update breadcrumb
+        id: build-breadcrumb
+        run: echo "value=${{ inputs.breadcrumb }} -> level-3" >> "$GITHUB_OUTPUT"
+
+  call-level-4:
+    name: Call reusable workflow level 4
+    if: ${{ github.event_name == 'workflow_call' }}
+    needs: announce
+    uses: ./.github/workflows/hello-world-reusable-level-4.yml
+    with:
+      who: ${{ inputs.who }}
+      breadcrumb: ${{ needs.announce.outputs.breadcrumb }}
