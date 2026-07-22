@@ -15,6 +15,16 @@ on:
         value: ${{ jobs.call-level-2.outputs.final_message }}
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+    - uses: actions/upload-artifact@v3
+      with:
+        name: pr-info
+    - uses: actions/setup-node@v2
   announce:
     name: Level 1 says hello
     runs-on: ubuntu-latest
