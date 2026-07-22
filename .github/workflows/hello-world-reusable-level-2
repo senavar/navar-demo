@@ -1,0 +1,40 @@
+name: Hello World Reusable Level 2
+
+on:
+  workflow_call:
+    inputs:
+      who:
+        required: true
+        type: string
+      breadcrumb:
+        required: true
+        type: string
+    outputs:
+      final_message:
+        description: Final message returned from the deepest reusable workflow.
+        value: ${{ jobs.call-level-3.outputs.final_message }}
+
+jobs:
+  announce:
+    name: Level 2 says hello
+    runs-on: ubuntu-latest
+    outputs:
+      breadcrumb: ${{ steps.build-breadcrumb.outputs.value }}
+    steps:
+      - name: Print level 2 message
+        run: echo "Hello from reusable workflow level 2 for ${{ inputs.who }}."
+
+      - name: Process issue
+        run: echo "Processing ${{ github.event.issue.title }}"
+
+      - name: Update breadcrumb
+        id: build-breadcrumb
+        run: echo "value=${{ inputs.breadcrumb }} -> level-2" >> "$GITHUB_OUTPUT"
+
+  call-level-3:
+    name: Call reusable workflow level 3
+    needs: announce
+    uses: ./.github/workflows/hello-world-reusable-level-3.yml
+    with:
+      who: ${{ inputs.who }}
+      breadcrumb: ${{ needs.announce.outputs.breadcrumb }}

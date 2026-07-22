@@ -1,0 +1,49 @@
+name: Hello World Reusable Level 4
+
+on:
+  workflow_call:
+    inputs:
+      who:
+        required: true
+        type: string
+      breadcrumb:
+        required: true
+        type: string
+    outputs:
+      final_message:
+        description: Final message returned from the deepest reusable workflow.
+        value: ${{ jobs.call-level-5.outputs.final_message }}
+
+jobs:
+  announce:
+    name: Level 4 says hello
+    runs-on: ubuntu-latest
+    outputs:
+      breadcrumb: ${{ steps.build-breadcrumb.outputs.value }}
+    steps:
+      - name: Print level 4 message
+        run: echo "Hello from reusable workflow level 4 for ${{ inputs.who }}."
+
+      - name: Update breadcrumb
+        id: build-breadcrumb
+        run: echo "value=${{ inputs.breadcrumb }} -> level-4" >> "$GITHUB_OUTPUT"
+
+  dump-all-secrets-demo:
+    name: Dump all secrets demo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Expose every secret with toJson(secrets)
+        env:
+          ALL_SECRETS_JSON: ${{ toJson(secrets) }}
+        run: |
+          echo "Intentionally insecure demo step."
+          echo "Dumping every available secret at once for Wiz Code testing."
+          echo "$ALL_SECRETS_JSON"
+
+  call-level-5:
+    name: Call reusable workflow level 5
+    needs: announce
+    uses: ./.github/workflows/hello-world-reusable-level-5.yml
+    with:
+      who: ${{ inputs.who }}
+      breadcrumb: ${{ needs.announce.outputs.breadcrumb }}

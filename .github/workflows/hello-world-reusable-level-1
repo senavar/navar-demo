@@ -1,0 +1,47 @@
+name: Hello World Reusable Level 1
+
+on:
+  workflow_call:
+    inputs:
+      who:
+        required: true
+        type: string
+      breadcrumb:
+        required: true
+        type: string
+    outputs:
+      final_message:
+        description: Final message returned from the deepest reusable workflow.
+        value: ${{ jobs.call-level-2.outputs.final_message }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+    - uses: actions/upload-artifact@v3
+      with:
+        name: pr-info
+    - uses: actions/setup-node@v2
+  announce:
+    name: Level 1 says hello
+    runs-on: ubuntu-latest
+    outputs:
+      breadcrumb: ${{ steps.build-breadcrumb.outputs.value }}
+    steps:
+      - name: Print level 1 message
+        run: echo "Hello from reusable workflow level 1 for ${{ inputs.who }}."
+
+      - name: Update breadcrumb
+        id: build-breadcrumb
+        run: echo "value=${{ inputs.breadcrumb }} -> level-1" >> "$GITHUB_OUTPUT"
+
+  call-level-2:
+    name: Call reusable workflow level 2
+    needs: announce
+    uses: ./.github/workflows/hello-world-reusable-level-2.yml
+    with:
+      who: ${{ inputs.who }}
+      breadcrumb: ${{ needs.announce.outputs.breadcrumb }}
